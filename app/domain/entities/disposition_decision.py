@@ -52,9 +52,7 @@ class DispositionDecision:
                 f"distance_km cannot be negative, got {distance_km}"
             )
         if route == Route.P2P and matched_buyer_id is None:
-            raise DomainValidationError(
-                "P2P route requires a matched_buyer_id"
-            )
+            raise DomainValidationError("P2P route requires a matched_buyer_id")
 
         self._return_id = return_id
         self._route = route
@@ -93,14 +91,14 @@ class DispositionDecision:
         if p2p_eligible:
             route = Route.P2P
             route_reason = (
-                f"Grade A item with buyer {distance_km:.1f}km away — P2P match selected"
+                f"Grade A item with buyer {distance_km:.1f}km away - P2P match selected"
             )
         elif fraud_flagged:
             route = Route.RESELL
-            route_reason = "Fraud flag active — overriding to Amazon warehouse resale"
+            route_reason = "Fraud flag active - overriding to Amazon warehouse resale"
         else:
             route = _GRADE_TO_DEFAULT_ROUTE[grade]
-            route_reason = f"Grade {grade.value} — defaulting to {route.display_label}"
+            route_reason = f"Grade {grade.value} - defaulting to {route.display_label}"
 
         recovery_pct = _RECOVERY_PERCENTAGES[route]
         recovery_value = mrp.percentage(recovery_pct)

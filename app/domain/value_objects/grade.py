@@ -33,10 +33,10 @@ class Grade(StrEnum):
     @property
     def display_label(self) -> str:
         labels: dict[Grade, str] = {
-            Grade.A: "Excellent — No visible damage",
-            Grade.B: "Good — Minor cosmetic damage",
-            Grade.C: "Fair — Significant damage",
-            Grade.DONATE: "Donate — Not suitable for resale",
-            Grade.SCRAP: "Scrap — End of life",
+            Grade.A: "Excellent - No visible damage",
+            Grade.B: "Good - Minor cosmetic damage",
+            Grade.C: "Fair - Significant damage",
+            Grade.DONATE: "Donate - Not suitable for resale",
+            Grade.SCRAP: "Scrap - End of life",
         }
         return labels[self]

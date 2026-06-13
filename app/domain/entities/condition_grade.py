@@ -17,9 +17,11 @@ class DamageLabel:
     def __post_init__(self) -> None:
         if not self.name or not self.name.strip():
             from app.domain.exceptions import DomainValidationError
+
             raise DomainValidationError("DamageLabel name cannot be empty")
         if not 0.0 <= self.confidence <= 100.0:
             from app.domain.exceptions import DomainValidationError
+
             raise DomainValidationError(
                 f"DamageLabel confidence must be 0-100, got {self.confidence}"
             )
@@ -79,7 +81,7 @@ class ConditionGrade:
             grade=Grade.C,
             confidence=ConfidenceScore.of(confidence),
             damage_labels=damage_labels,
-            damage_description="Confidence too low for automated grading — human review required.",
+            damage_description="Confidence too low for automated grading - human review required.",
             image_keys=image_keys,
             graded_at=datetime.now(UTC),
             routed_to_human_review=True,

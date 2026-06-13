@@ -1,3 +1,4 @@
+# app/application/use_cases/dto.py
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -55,3 +56,31 @@ class ImageUploadCompleteResult:
     image_count: int
     expected_image_count: int
     all_images_received: bool
+
+
+@dataclass(frozen=True)
+class DamageLabelDTO:
+    name: str
+    confidence: float
+
+
+@dataclass(frozen=True)
+class ProcessGradingResult:
+    return_id: str
+    grade: str
+    confidence: float
+    damage_labels: list[DamageLabelDTO]
+    damage_description: str
+    routed_to_human_review: bool
+    graded_at: datetime
+
+
+@dataclass(frozen=True)
+class ConditionGradeResult:
+    return_id: str
+    grade: str
+    confidence: float
+    damage_labels: list[DamageLabelDTO]
+    damage_description: str
+    routed_to_human_review: bool
+    graded_at: datetime

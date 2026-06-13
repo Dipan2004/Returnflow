@@ -23,11 +23,10 @@ class AppConfig(BaseSettings):
 
     s3_image_bucket: str = Field(default="returniq-images-local")
     s3_presign_expiry_seconds: int = Field(default=300)
+    s3_endpoint_url: str | None = Field(default=None)
 
     dynamodb_table_name: str = Field(default="returniq-main")
     dynamodb_endpoint_url: str | None = Field(default=None)
-
-    s3_endpoint_url: str | None = Field(default=None)
 
     step_functions_workflow_arn: str = Field(default="")
 

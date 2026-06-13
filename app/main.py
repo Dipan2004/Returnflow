@@ -1,3 +1,4 @@
+# app/main.py
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
@@ -8,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api.routers import health, returns
+from app.api.routers import grades
 from app.config import get_config
 from app.container import Container
 from app.domain.exceptions import (
@@ -65,6 +67,7 @@ def create_app() -> FastAPI:
 
     application.include_router(health.router)
     application.include_router(returns.router)
+    application.include_router(grades.router)
 
     @application.exception_handler(EntityNotFoundError)
     async def entity_not_found_handler(

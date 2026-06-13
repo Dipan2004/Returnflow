@@ -117,6 +117,7 @@ class HealthCard:
 
     def is_expired(self) -> bool:
         from datetime import timedelta
+
         expiry = self._created_at + timedelta(hours=self._ttl_hours)
         return datetime.now(UTC) > expiry
 

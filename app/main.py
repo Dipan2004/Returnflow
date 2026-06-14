@@ -8,7 +8,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api.routers import dispositions, fraud, grades, health, returns
+from app.api.routers import buyer_match, dispositions, fraud, grades, health, returns
 from app.config import get_config
 from app.container import Container
 from app.domain.exceptions import (
@@ -69,6 +69,7 @@ def create_app() -> FastAPI:
     application.include_router(grades.router)
     application.include_router(dispositions.router)
     application.include_router(fraud.router)
+    application.include_router(buyer_match.router)
 
     @application.exception_handler(EntityNotFoundError)
     async def entity_not_found_handler(

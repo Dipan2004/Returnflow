@@ -1,0 +1,145 @@
+# docs/phases/phase-04c-buyer-matching.md
+
+## Phase 4C — BuyerMatchIQ
+
+### Architecture
+
+Clean Architecture / DDD. No modification to fraud/disposition flows.
+
+---
+
+### Files Created
+
+#### Domain
+
+| File | Purpose |
+|------|---------|
+| `app/domain/value_objects/demand_level.py` | DemandLevel enum (LOW/MEDIUM/HIGH) |
+| `app/domain/value_objects/demand_score.py` | DemandScore VO with 0-100 validation |
+| `app/domain/value_objects/match_confidence.py` | MatchConfidence enum |
+| `app/domain/value_objects/buyer_eligibility.py` | BuyerEligibility enum |
+| `app/domain/entities/buyer_match_result.py` | BuyerMatchResult entity |
+| `app/domain/services/buyer_matching_engine.py` | BuyerMatchingEngine domain service |
+
+#### Application
+
+| File | Purpose |
+|------|---------|
+| `app/application/ports/demand_index_port.py` | DemandIndexPort ABC |
+| `app/application/ports/buyer_matching_port.py` | BuyerMatchingPort ABC |
+| `app/application/ports/buyer_match_repository.py` | BuyerMatchRepository ABC |
+| `app/application/use_cases/buyer_match_dto.py` | BuyerMatchRequest/Response/Summary DTOs |
+| `app/application/use_cases/match_buyer_use_case.py` | MatchBuyerUseCase |
+| `app/application/use_cases/get_buyer_match_use_case.py` | GetBuyerMatchUseCase |
+
+#### Infrastructure
+
+| File | Purpose |
+|------|---------|
+| `app/infrastructure/adapters/buyer_match/in_memory_demand_index.py` | InMemoryDemandIndex (SKU001→85, SKU002→72, SKU003→25) |
+| `app/infrastructure/adapters/buyer_match/in_memory_buyer_matching_adapter.py` | InMemoryBuyerMatchingAdapter (SKU001→8, SKU002→4, SKU003→0) |
+| `app/infrastructure/persistence/buyer_match_mapper.py` | DynamoDB mapper (to_item/from_item) |
+| `app/infrastructure/persistence/dynamodb_buyer_match_repository.py` | DynamoDBBuyerMatchRepository |
+
+#### API
+
+| File | Purpose |
+|------|---------|
+| `app/api/schemas/buyer_match_schemas.py` | Pydantic schemas |
+| `app/api/routers/buyer_match.py` | POST /buyer-match/compute, GET /buyer-match/{return_id} |
+
+#### Tests
+
+| File | Tests |
+|------|-------|
+| `tests/fakes/fake_demand_index_port.py` | FakeDemandIndexPort |
+| `tests/fakes/fake_buyer_matching_port.py` | FakeBuyerMatchingPort |
+| `tests/fakes/fake_buyer_match_repository.py` | FakeBuyerMatchRepository |
+| `tests/unit/domain/test_buyer_matching.py` | 26 domain tests |
+| `tests/unit/application/test_buyer_match_use_cases.py` | 22 use case + fake port tests |
+| `tests/unit/infrastructure/test_buyer_match_mapper.py` | 11 mapper + adapter tests |
+| `tests/integration/test_buyer_match_api.py` | 11 API integration tests |
+
+---
+
+### Files Modified
+
+- `app/container.py` — added buyer_match providers and use case factories
+- `app/main.py` — registered `buyer_match.router`
+
+---
+
+### Business Rules
+
+**Eligibility**
+- Grade A → ELIGIBLE always
+- Grade B → ELIGIBLE only if demand_score > 80
+- Grade C → NOT_ELIGIBLE
+- SCRAP → NOT_ELIGIBLE
+
+**Demand Score**
+- 0–39 → LOW
+- 40–69 → MEDIUM
+- 70–100 → HIGH
+
+**Match Confidence** (composite of demand + buyer_count + grade)
+- HIGH ≥ 80 points
+- MEDIUM ≥ 40 points
+- LOW < 40 points
+
+**match_found** = eligibility.is_eligible AND estimated_buyers > 0
+
+**p2p_recommended** = match_found AND eligible
+
+---
+
+### API Endpoints
+
+```
+POST /buyer-match/compute
+Body: { return_id, sku_id, pincode, grade }
+Returns: full BuyerMatchResponse
+
+GET /buyer-match/{return_id}
+Returns: persisted BuyerMatchResponse or 404
+```
+
+---
+
+### Persistence Design
+
+DynamoDB single-table:
+- PK: `RETURN#{return_id}`
+- SK: `BUYER_MATCH`
+- entity_type: `BUYER_MATCH_RESULT`
+
+---
+
+### Demo Data (InMemory Adapters)
+
+| SKU | demand_score | buyer_count |
+|-----|-------------|-------------|
+| SKU001 | 85 | 8 |
+| SKU002 | 72 | 4 |
+| SKU003 | 25 | 0 |
+| unknown | 50 (default) | 3 (default) |
+
+---
+
+### Testing Summary
+
+- Baseline: 209 tests
+- Phase 4C added: 67 tests
+- Final: 276 tests, 0 failures
+- ruff: PASS
+- mypy: PASS (1 pre-existing SQS error unrelated to this phase)
+
+---
+
+### Migration Notes for Phase 4D
+
+Phase 4D routing integration should:
+1. Call `MatchBuyerUseCase` before `CalculateDispositionUseCase`
+2. Use `BuyerMatchResult.p2p_recommended` to influence route selection
+3. Wire `buyer_match_repository` as dependency in the routing service
+4. Do NOT modify `BuyerMatchingEngine` — routing logic belongs in DispositionEngine or a new RoutingOrchestrator

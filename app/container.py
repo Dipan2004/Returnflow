@@ -10,6 +10,7 @@ from app.application.use_cases.calculate_disposition_use_case import (
 )
 from app.application.use_cases.complete_image_upload_use_case import CompleteImageUploadUseCase
 from app.application.use_cases.create_return_use_case import CreateReturnUseCase
+from app.application.use_cases.get_buyer_match_use_case import GetBuyerMatchUseCase
 from app.application.use_cases.get_condition_grade_use_case import GetConditionGradeUseCase
 from app.application.use_cases.get_disposition_use_case import GetDispositionUseCase
 from app.application.use_cases.get_fraud_assessment_use_case import GetFraudAssessmentUseCase
@@ -17,14 +18,20 @@ from app.application.use_cases.get_return_status_use_case import GetReturnStatus
 from app.application.use_cases.get_return_use_case import GetReturnUseCase
 from app.application.use_cases.get_review_status_use_case import GetReviewStatusUseCase
 from app.application.use_cases.get_workflow_state_use_case import GetWorkflowStateUseCase
+from app.application.use_cases.match_buyer_use_case import MatchBuyerUseCase
 from app.application.use_cases.process_grading_use_case import ProcessGradingUseCase
 from app.config import AppConfig, get_config
+from app.domain.services.buyer_matching_engine import BuyerMatchingEngine
 from app.domain.services.disposition_engine import DispositionEngine
 from app.domain.services.fraud_engine import FraudEngine
 from app.domain.services.human_review_decision import ConfidenceGate
 from app.infrastructure.adapters.bedrock.bedrock_description_adapter import (
     BedrockDescriptionAdapter,
 )
+from app.infrastructure.adapters.buyer_match.in_memory_buyer_matching_adapter import (
+    InMemoryBuyerMatchingAdapter,
+)
+from app.infrastructure.adapters.buyer_match.in_memory_demand_index import InMemoryDemandIndex
 from app.infrastructure.adapters.catalog.in_memory_product_catalog import (
     InMemoryProductCatalog,
 )
@@ -40,6 +47,9 @@ from app.infrastructure.aws.clients import (
     build_rekognition_client,
     build_s3_client,
     build_sqs_client,
+)
+from app.infrastructure.persistence.dynamodb_buyer_match_repository import (
+    DynamoDBBuyerMatchRepository,
 )
 from app.infrastructure.persistence.dynamodb_condition_grade_repository import (
     DynamoDBConditionGradeRepository,
@@ -197,4 +207,23 @@ class Container(containers.DeclarativeContainer):
     get_fraud_assessment_use_case = providers.Factory(
         GetFraudAssessmentUseCase,
         fraud_repository=fraud_repository,
+    )
+
+    demand_index_port = providers.Singleton(InMemoryDemandIndex)
+    buyer_matching_port = providers.Singleton(InMemoryBuyerMatchingAdapter)
+    buyer_match_repository = providers.Singleton(
+        DynamoDBBuyerMatchRepository, table=dynamodb_table
+    )
+    buyer_matching_engine = providers.Singleton(BuyerMatchingEngine)
+
+    match_buyer_use_case = providers.Factory(
+        MatchBuyerUseCase,
+        demand_index_port=demand_index_port,
+        buyer_matching_port=buyer_matching_port,
+        buyer_match_repository=buyer_match_repository,
+        buyer_matching_engine=buyer_matching_engine,
+    )
+    get_buyer_match_use_case = providers.Factory(
+        GetBuyerMatchUseCase,
+        buyer_match_repository=buyer_match_repository,
     )

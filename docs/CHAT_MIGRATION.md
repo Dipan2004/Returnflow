@@ -163,3 +163,42 @@ with `Object(None)` ports, ruff/mypy errors.
 - Fraud flag forces RESELL ✓
 
 **Handoff:** Phase 4A complete. Next is Phase 4B (Fraud + Health Cards).
+
+---
+
+## Session: Phase 4B - Fraud Detection Engine
+
+**Starting state:** Phase 4A complete (162 tests passing).
+
+**Work done this session:**
+
+1. Replaced old `FraudAssessment` entity with multi-signal system:
+   FraudRiskLevel (LOW/MEDIUM/HIGH), FraudSignal (weighted triggers),
+   FraudOverrideReason (route override metadata).
+2. Created `FraudEngine` domain service with 4 configurable signals:
+   excessive returns (weight 30), high-value (25), repeat SKU (25),
+   velocity (20). Score capped at 100, level derived from thresholds.
+3. Created ports: `FraudHistoryPort`, `FraudRepository`.
+4. Created use cases: `AssessFraudUseCase`, `GetFraudAssessmentUseCase`.
+5. Created DynamoDB persistence: `fraud_mapper`, `DynamoDBFraudRepository`.
+6. Created API: `POST /fraud/assess`, `GET /fraud/{return_id}`.
+7. Created fakes: `FakeFraudHistoryPort`, `FakeFraudRepository`.
+8. Created full test suite: 47 new tests across domain, service,
+   use case, mapper, and integration layers.
+9. Updated container wiring and main.py router registration.
+10. Updated docs.
+
+**Business rules verified:**
+- LOW: score 0-39 ✓
+- MEDIUM: score 40-69 ✓
+- HIGH: score 70-100 ✓
+- HIGH risk overrides route to RESELL ✓
+- Override reason stored with full metadata ✓
+- Score = sum of triggered signal weights, capped at 100 ✓
+
+**Final verification:**
+- `pytest` → **209 passed**
+- `ruff check .` → **All checks passed!**
+- `mypy app` → **Success: no issues found in 108 source files**
+
+**Handoff:** Phase 4B complete. Next is Phase 4C (Health Cards + QR).

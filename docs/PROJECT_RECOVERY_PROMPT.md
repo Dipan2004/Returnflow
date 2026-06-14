@@ -8,17 +8,16 @@ ReturnIQ is an intelligent returns disposition engine for Amazon HackOn Season 6
 It's a serverless FastAPI backend using Clean Architecture / DDD patterns with
 dependency injection, Pydantic v2, and AWS services (Rekognition, Bedrock, DynamoDB, SQS, S3).
 
-## Current State: Phase 4A Complete
+## Current State: Phase 4B Complete
 
-The Condition Assessment pipeline and Disposition Engine are fully implemented:
-- Phase 1: Domain foundation (entities, VOs, exceptions)
-- Phase 2: Return intake APIs (create, status, image upload)
-- Phase 3A: Rekognition grading adapter + grade mapper + confidence gate
-- Phase 3Ba: Bedrock Claude Haiku damage description adapter
-- Phase 3Bb: SQS human review queue + GradingWorkflowService + workflow tracking APIs
-- Phase 4A: Disposition Engine (Grade→Route decision tree, recovery values, persistence, APIs)
+All phases through 4B implemented:
+- Phase 1: Domain foundation
+- Phase 2: Return intake APIs
+- Phase 3A/3Ba/3Bb: Condition grading + Bedrock + Workflow + SQS
+- Phase 4A: Disposition Engine
+- Phase 4B: Fraud Detection Engine (multi-signal, route override)
 
-**162 tests passing.** `ruff check .` clean. `mypy app` clean.
+**209 tests passing.** `ruff check .` clean. `mypy app` clean.
 
 ## Key Architecture Patterns
 
@@ -41,19 +40,19 @@ pytest tests/            # verify 95 tests pass
 
 1. `docs/PROJECT_STATE.md` — what exists, what doesn't
 2. `docs/REPOSITORY_MAP.md` — file layout with descriptions
-3. `docs/phases/phase-04a-disposition-engine.md` — latest phase details
+3. `docs/phases/phase-04b-fraud-engine.md` — latest phase details
 4. `app/container.py` — all wiring in one place
-5. `app/domain/services/disposition_engine.py` — routing business rules
-6. `app/application/services/grading_workflow_service.py` — orchestration pattern
+5. `app/domain/services/fraud_engine.py` — fraud signal evaluation
+6. `app/domain/services/disposition_engine.py` — routing business rules
 
-## Next Phase: 4B — Fraud Detection + Health Cards
+## Next Phase: 4C — Health Cards + QR + Notifications
 
 Implement:
-1. `FraudCheckService`: bulk-buy detection (10+ units in 72h blocks P2P)
-2. `HealthCardGenerator`: DynamoDB write + QR code → S3
-3. `SNSNotificationAdapter`: buyer SMS/email
-4. Real `DemandSignalPort` adapter (DynamoDB demand index)
-5. Real `ProductCatalogPort` adapter (DynamoDB catalog or hardcoded demo data)
+1. `HealthCardGenerator`: DynamoDB write + QR code → S3
+2. `QRVerificationService`: tamper-evident scan tracking
+3. `SNSNotificationAdapter`: buyer SMS/email on P2P match
+4. Real `FraudHistoryPort` adapter (DynamoDB buyer history)
+5. Real `DemandSignalPort` adapter (DynamoDB demand index)
 6. APIs: `GET /health-cards/{id}`, `GET /verify/{qr_token}`
 
 Follow the same pattern: port → adapter → service → use case → router → test.

@@ -4,6 +4,7 @@ from __future__ import annotations
 from dependency_injector import containers, providers
 
 from app.application.services.grading_workflow_service import GradingWorkflowService
+from app.application.use_cases.assess_fraud_use_case import AssessFraudUseCase
 from app.application.use_cases.calculate_disposition_use_case import (
     CalculateDispositionUseCase,
 )
@@ -11,6 +12,7 @@ from app.application.use_cases.complete_image_upload_use_case import CompleteIma
 from app.application.use_cases.create_return_use_case import CreateReturnUseCase
 from app.application.use_cases.get_condition_grade_use_case import GetConditionGradeUseCase
 from app.application.use_cases.get_disposition_use_case import GetDispositionUseCase
+from app.application.use_cases.get_fraud_assessment_use_case import GetFraudAssessmentUseCase
 from app.application.use_cases.get_return_status_use_case import GetReturnStatusUseCase
 from app.application.use_cases.get_return_use_case import GetReturnUseCase
 from app.application.use_cases.get_review_status_use_case import GetReviewStatusUseCase
@@ -18,6 +20,7 @@ from app.application.use_cases.get_workflow_state_use_case import GetWorkflowSta
 from app.application.use_cases.process_grading_use_case import ProcessGradingUseCase
 from app.config import AppConfig, get_config
 from app.domain.services.disposition_engine import DispositionEngine
+from app.domain.services.fraud_engine import FraudEngine
 from app.domain.services.human_review_decision import ConfidenceGate
 from app.infrastructure.adapters.bedrock.bedrock_description_adapter import (
     BedrockDescriptionAdapter,
@@ -37,6 +40,7 @@ from app.infrastructure.persistence.dynamodb_condition_grade_repository import (
 from app.infrastructure.persistence.dynamodb_disposition_repository import (
     DynamoDBDispositionRepository,
 )
+from app.infrastructure.persistence.dynamodb_fraud_repository import DynamoDBFraudRepository
 from app.infrastructure.persistence.dynamodb_return_repository import DynamoDBReturnRepository
 from app.infrastructure.persistence.dynamodb_workflow_state_repository import (
     DynamoDBWorkflowStateRepository,
@@ -161,4 +165,27 @@ class Container(containers.DeclarativeContainer):
     get_disposition_use_case = providers.Factory(
         GetDispositionUseCase,
         disposition_repository=disposition_repository,
+    )
+
+    # ------------------------------------------------------------------ Phase 4B
+    fraud_repository = providers.Singleton(
+        DynamoDBFraudRepository, table=dynamodb_table
+    )
+
+    fraud_engine = providers.Singleton(
+        FraudEngine,
+        bulk_buy_threshold=config.provided.fraud_bulk_buy_threshold,
+        window_hours=config.provided.fraud_window_hours,
+    )
+
+    assess_fraud_use_case = providers.Factory(
+        AssessFraudUseCase,
+        fraud_history_port=providers.Object(None),
+        fraud_repository=fraud_repository,
+        fraud_engine=fraud_engine,
+    )
+
+    get_fraud_assessment_use_case = providers.Factory(
+        GetFraudAssessmentUseCase,
+        fraud_repository=fraud_repository,
     )

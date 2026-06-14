@@ -1,6 +1,6 @@
 # Project State
 
-_Last updated: end of Phase 4A — Disposition Engine._
+_Last updated: end of Phase 4B — Fraud Detection Engine._
 
 ## Summary
 
@@ -55,17 +55,16 @@ router with PRD-compliant recovery value calculations.
 - `GET /grades/{id}/review-status` (human review status)
 
 ### Tests
-- **162 tests passing.** Unit (domain, application, infrastructure) +
+- **209 tests passing.** Unit (domain, application, infrastructure) +
   integration (API with moto-mocked AWS).
 
 ## What Is NOT Implemented Yet
 
-- Fraud Detection Layer.
 - Health Card Generation + QR code + tamper verification.
 - SNS/SES Buyer Notifications.
 - SageMaker PreventIQ (return prediction).
 - Flywheel Dashboard APIs.
-- Real DemandSignalPort / ProductCatalogPort adapters (wired as None stubs).
+- Real DemandSignalPort / ProductCatalogPort / FraudHistoryPort adapters.
 - Step Functions ASL template (deployed via SAM, not in app code).
 - Authentication (API key / Cognito).
 
@@ -89,7 +88,8 @@ make check                    # ruff + mypy + pytest
 | 3Ba | Bedrock Damage Description | ✅ Complete |
 | 3Bb | Human Review Queue + Workflow | ✅ Complete |
 | 4A | Disposition Engine | ✅ Complete |
-| 4B | Fraud + Health Cards + Notifications | 🔜 Next |
+| 4B | Fraud Detection Engine | ✅ Complete |
+| 4C | Health Cards + QR + Notifications | 🔜 Next |
 
 ## Next Phase (Phase 4B - Recommended)
 

@@ -1,9 +1,51 @@
+# app/domain/entities/fraud_assessment.py
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import UTC, datetime
+from enum import StrEnum
 
 from app.domain.exceptions import DomainValidationError
 from app.domain.value_objects.return_id import ReturnId
+
+
+class FraudRiskLevel(StrEnum):
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
+
+    @classmethod
+    def from_score(cls, score: int) -> FraudRiskLevel:
+        if score < 0 or score > 100:
+            raise DomainValidationError(f"Fraud score must be 0-100, got {score}")
+        if score >= 70:
+            return cls.HIGH
+        if score >= 40:
+            return cls.MEDIUM
+        return cls.LOW
+
+
+@dataclass(frozen=True)
+class FraudSignal:
+    name: str
+    weight: int
+    triggered: bool
+    detail: str
+
+    def __post_init__(self) -> None:
+        if not self.name or not self.name.strip():
+            raise DomainValidationError("FraudSignal name cannot be empty")
+        if self.weight < 0 or self.weight > 100:
+            raise DomainValidationError(f"FraudSignal weight must be 0-100, got {self.weight}")
+
+
+@dataclass(frozen=True)
+class FraudOverrideReason:
+    original_route: str
+    overridden_route: str
+    risk_level: str
+    risk_score: int
+    reason: str
 
 
 class FraudAssessment:
@@ -12,66 +54,53 @@ class FraudAssessment:
         return_id: ReturnId,
         buyer_id: str,
         sku_id: str,
-        purchase_count_in_window: int,
-        window_hours: int,
-        bulk_buy_threshold: int,
+        risk_score: int,
+        risk_level: FraudRiskLevel,
+        signals: list[FraudSignal],
+        override_reason: FraudOverrideReason | None,
         assessed_at: datetime,
-        flagged: bool,
-        flag_reason: str | None = None,
     ) -> None:
         if not buyer_id or not buyer_id.strip():
             raise DomainValidationError("buyer_id cannot be empty")
         if not sku_id or not sku_id.strip():
             raise DomainValidationError("sku_id cannot be empty")
-        if purchase_count_in_window < 0:
-            raise DomainValidationError(
-                f"purchase_count_in_window cannot be negative, got {purchase_count_in_window}"
-            )
-        if window_hours < 1:
-            raise DomainValidationError("window_hours must be at least 1")
-        if bulk_buy_threshold < 1:
-            raise DomainValidationError("bulk_buy_threshold must be at least 1")
-        if flagged and not flag_reason:
-            raise DomainValidationError("flag_reason is required when fraud is flagged")
-
+        if risk_score < 0 or risk_score > 100:
+            raise DomainValidationError(f"risk_score must be 0-100, got {risk_score}")
         self._return_id = return_id
         self._buyer_id = buyer_id.strip()
         self._sku_id = sku_id.strip()
-        self._purchase_count_in_window = purchase_count_in_window
-        self._window_hours = window_hours
-        self._bulk_buy_threshold = bulk_buy_threshold
+        self._risk_score = risk_score
+        self._risk_level = risk_level
+        self._signals = list(signals)
+        self._override_reason = override_reason
         self._assessed_at = assessed_at
-        self._flagged = flagged
-        self._flag_reason = flag_reason
 
     @classmethod
-    def assess(
+    def create(
         cls,
         return_id: ReturnId,
         buyer_id: str,
         sku_id: str,
-        purchase_count_in_window: int,
-        window_hours: int,
-        bulk_buy_threshold: int,
+        signals: list[FraudSignal],
+        override_reason: FraudOverrideReason | None = None,
     ) -> FraudAssessment:
-        flagged = purchase_count_in_window >= bulk_buy_threshold
-        flag_reason = (
-            f"Buyer purchased {purchase_count_in_window} units of SKU '{sku_id}' "
-            f"in the last {window_hours} hours (threshold: {bulk_buy_threshold})"
-            if flagged
-            else None
-        )
+        triggered = [s for s in signals if s.triggered]
+        score = min(100, sum(s.weight for s in triggered))
+        level = FraudRiskLevel.from_score(score)
         return cls(
             return_id=return_id,
             buyer_id=buyer_id,
             sku_id=sku_id,
-            purchase_count_in_window=purchase_count_in_window,
-            window_hours=window_hours,
-            bulk_buy_threshold=bulk_buy_threshold,
+            risk_score=score,
+            risk_level=level,
+            signals=signals,
+            override_reason=override_reason,
             assessed_at=datetime.now(UTC),
-            flagged=flagged,
-            flag_reason=flag_reason,
         )
+
+    @property
+    def requires_route_override(self) -> bool:
+        return self._risk_level == FraudRiskLevel.HIGH
 
     @property
     def return_id(self) -> ReturnId:
@@ -86,28 +115,28 @@ class FraudAssessment:
         return self._sku_id
 
     @property
-    def purchase_count_in_window(self) -> int:
-        return self._purchase_count_in_window
+    def risk_score(self) -> int:
+        return self._risk_score
 
     @property
-    def window_hours(self) -> int:
-        return self._window_hours
+    def risk_level(self) -> FraudRiskLevel:
+        return self._risk_level
 
     @property
-    def bulk_buy_threshold(self) -> int:
-        return self._bulk_buy_threshold
+    def signals(self) -> list[FraudSignal]:
+        return list(self._signals)
+
+    @property
+    def triggered_signals(self) -> list[FraudSignal]:
+        return [s for s in self._signals if s.triggered]
+
+    @property
+    def override_reason(self) -> FraudOverrideReason | None:
+        return self._override_reason
 
     @property
     def assessed_at(self) -> datetime:
         return self._assessed_at
-
-    @property
-    def flagged(self) -> bool:
-        return self._flagged
-
-    @property
-    def flag_reason(self) -> str | None:
-        return self._flag_reason
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, FraudAssessment):
@@ -116,9 +145,3 @@ class FraudAssessment:
 
     def __hash__(self) -> int:
         return hash(self._return_id)
-
-    def __repr__(self) -> str:
-        return (
-            f"FraudAssessment(return_id={self._return_id}, buyer={self._buyer_id}, "
-            f"flagged={self._flagged})"
-        )

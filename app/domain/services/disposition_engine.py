@@ -43,6 +43,23 @@ class DispositionEngine:
             p2p_max_radius_km=self._p2p_max_radius_km,
         )
 
+    def calculate_with_fraud_override(
+        self,
+        return_id: ReturnId,
+        grade: Grade,
+        mrp: Money,
+    ) -> DispositionDecision:
+        return DispositionDecision.decide(
+            return_id=return_id,
+            grade=grade,
+            mrp=mrp,
+            fraud_flagged=True,
+            has_p2p_match=False,
+            distance_km=None,
+            matched_buyer_id=None,
+            p2p_max_radius_km=self._p2p_max_radius_km,
+        )
+
     @staticmethod
     def recovery_percentage_for_grade(grade: Grade, has_p2p_demand: bool = False) -> float:
         if grade == Grade.A:

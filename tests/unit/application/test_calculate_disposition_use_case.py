@@ -12,6 +12,7 @@ from app.application.use_cases.disposition_dto import DispositionRequest
 from app.domain.entities.condition_grade import ConditionGrade, DamageLabel
 from app.domain.exceptions import DomainValidationError, EntityNotFoundError
 from app.domain.services.disposition_engine import DispositionEngine
+from app.domain.services.fraud_engine import FraudEngine
 from app.domain.value_objects.confidence_score import ConfidenceScore
 from app.domain.value_objects.grade import Grade
 from app.domain.value_objects.image_key import ImageKey
@@ -21,6 +22,8 @@ from tests.factories.domain_factories import make_return_request
 from tests.fakes.fake_condition_grade_repository import FakeConditionGradeRepository
 from tests.fakes.fake_demand_signal_port import FakeDemandSignalPort
 from tests.fakes.fake_disposition_repository import FakeDispositionRepository
+from tests.fakes.fake_fraud_history_port import FakeFraudHistoryPort
+from tests.fakes.fake_fraud_repository import FakeFraudRepository
 from tests.fakes.fake_product_catalog_port import FakeProductCatalogPort
 from tests.fakes.fake_return_repository import FakeReturnRepository
 
@@ -46,6 +49,7 @@ def _make_use_case(
     returns: FakeReturnRepository | None = None,
     grades: FakeConditionGradeRepository | None = None,
     dispositions: FakeDispositionRepository | None = None,
+    fraud_history: FakeFraudHistoryPort | None = None,
 ) -> tuple[
     CalculateDispositionUseCase,
     FakeReturnRepository,
@@ -59,7 +63,10 @@ def _make_use_case(
     d = dispositions or FakeDispositionRepository()
     dem = demand or FakeDemandSignalPort(has_demand=False)
     cat = catalog or FakeProductCatalogPort(default_mrp=Decimal("10000.00"))
+    fh = fraud_history or FakeFraudHistoryPort()
+    fr = FakeFraudRepository()
     engine = DispositionEngine(p2p_max_radius_km=5.0)
+    fraud_eng = FraudEngine(bulk_buy_threshold=10, window_hours=72)
     uc = CalculateDispositionUseCase(
         return_repository=r,
         condition_grade_repository=g,
@@ -67,6 +74,9 @@ def _make_use_case(
         demand_signal_port=dem,
         product_catalog_port=cat,
         disposition_engine=engine,
+        fraud_history_port=fh,
+        fraud_repository=fr,
+        fraud_engine=fraud_eng,
     )
     return uc, r, g, d, dem, cat
 

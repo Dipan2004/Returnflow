@@ -6,6 +6,8 @@ from decimal import Decimal
 from app.application.ports.condition_grade_repository import ConditionGradeRepository
 from app.application.ports.demand_signal_port import DemandSignalPort
 from app.application.ports.disposition_repository import DispositionRepository
+from app.application.ports.fraud_history_port import FraudHistoryPort
+from app.application.ports.fraud_repository import FraudRepository
 from app.application.ports.product_catalog_port import ProductCatalogPort
 from app.application.ports.return_repository import ReturnRepository
 from app.application.use_cases.disposition_dto import (
@@ -15,6 +17,7 @@ from app.application.use_cases.disposition_dto import (
 )
 from app.domain.exceptions import DomainValidationError, EntityNotFoundError
 from app.domain.services.disposition_engine import DispositionEngine
+from app.domain.services.fraud_engine import FraudEngine
 from app.domain.value_objects.money import Money
 from app.domain.value_objects.return_id import ReturnId
 from app.infrastructure.logging import get_logger
@@ -23,18 +26,6 @@ logger = get_logger(__name__)
 
 
 class CalculateDispositionUseCase:
-    """
-    Orchestrates the full disposition calculation:
-
-    1. Load ReturnRequest (to get sku_id, seller_pincode, buyer_id).
-    2. Load ConditionGrade (for the grade).
-    3. Resolve MRP: from request override or ProductCatalogPort.
-    4. Query DemandSignalPort for P2P buyer availability.
-    5. Invoke DispositionEngine.calculate().
-    6. Persist the DispositionDecision.
-    7. Return DispositionResponse DTO.
-    """
-
     def __init__(
         self,
         return_repository: ReturnRepository,
@@ -43,6 +34,9 @@ class CalculateDispositionUseCase:
         demand_signal_port: DemandSignalPort,
         product_catalog_port: ProductCatalogPort,
         disposition_engine: DispositionEngine,
+        fraud_history_port: FraudHistoryPort,
+        fraud_repository: FraudRepository,
+        fraud_engine: FraudEngine,
     ) -> None:
         self._returns = return_repository
         self._grades = condition_grade_repository
@@ -50,6 +44,9 @@ class CalculateDispositionUseCase:
         self._demand = demand_signal_port
         self._catalog = product_catalog_port
         self._engine = disposition_engine
+        self._fraud_history = fraud_history_port
+        self._fraud_repository = fraud_repository
+        self._fraud_engine = fraud_engine
 
     async def execute(self, request: DispositionRequest) -> DispositionResponse:
         return_id = ReturnId(request.return_id)
@@ -62,7 +59,6 @@ class CalculateDispositionUseCase:
         if condition_grade is None:
             raise EntityNotFoundError("ConditionGrade", request.return_id)
 
-        # Resolve MRP
         mrp_decimal: Decimal
         if request.mrp is not None:
             mrp_decimal = request.mrp
@@ -77,7 +73,6 @@ class CalculateDispositionUseCase:
 
         mrp = Money.of(mrp_decimal)
 
-        # Query demand
         buyer_info = await self._demand.get_nearest_buyer(
             sku_id=request.sku_id,
             seller_pincode=request.seller_pincode,
@@ -88,7 +83,6 @@ class CalculateDispositionUseCase:
         if buyer_info is not None:
             matched_buyer_id, distance_km = buyer_info
 
-        # Run engine
         decision = self._engine.calculate(
             return_id=return_id,
             grade=condition_grade.grade,
@@ -98,6 +92,40 @@ class CalculateDispositionUseCase:
             matched_buyer_id=matched_buyer_id,
         )
 
+        fraud_history = await self._fraud_history.get_buyer_history(
+            buyer_id=return_request.buyer_id,
+            sku_id=request.sku_id,
+            window_hours=self._fraud_engine._window_hours,
+        )
+
+        fraud_assessment = self._fraud_engine.assess(
+            return_id=return_id,
+            buyer_id=return_request.buyer_id,
+            sku_id=request.sku_id,
+            total_returns_in_window=fraud_history.total_returns_in_window,
+            high_value_returns_in_window=fraud_history.high_value_returns_in_window,
+            same_sku_returns_in_window=fraud_history.same_sku_returns_in_window,
+            returns_last_24h=fraud_history.returns_last_24h,
+            original_route=decision.route,
+        )
+
+        await self._fraud_repository.save(fraud_assessment)
+
+        if fraud_assessment.requires_route_override:
+            decision = self._engine.calculate_with_fraud_override(
+                return_id=return_id,
+                grade=condition_grade.grade,
+                mrp=mrp,
+            )
+            logger.warning(
+                "Fraud override applied",
+                return_id=request.return_id,
+                original_route=fraud_assessment.override_reason.original_route
+                if fraud_assessment.override_reason
+                else "UNKNOWN",
+                risk_score=fraud_assessment.risk_score,
+            )
+
         await self._dispositions.save(decision)
 
         logger.info(
@@ -105,8 +133,7 @@ class CalculateDispositionUseCase:
             return_id=request.return_id,
             grade=condition_grade.grade.value,
             route=decision.route.value,
-            recovery_value=str(decision.recovery_value),
-            value_delta=str(decision.value_delta),
+            fraud_level=fraud_assessment.risk_level.value,
         )
 
         recovery_pct = float(
@@ -126,7 +153,7 @@ class CalculateDispositionUseCase:
                 value_delta=decision.value_delta.amount,
                 recovery_percentage=recovery_pct,
             ),
-            fraud_flagged=decision.fraud_flagged,
+            fraud_flagged=fraud_assessment.requires_route_override,
             matched_buyer_id=decision.matched_buyer_id,
             distance_km=decision.distance_km,
             decided_at=decision.decided_at,

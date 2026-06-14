@@ -25,6 +25,13 @@ from app.domain.services.human_review_decision import ConfidenceGate
 from app.infrastructure.adapters.bedrock.bedrock_description_adapter import (
     BedrockDescriptionAdapter,
 )
+from app.infrastructure.adapters.catalog.in_memory_product_catalog import (
+    InMemoryProductCatalog,
+)
+from app.infrastructure.adapters.demand.in_memory_demand_signal import InMemoryDemandSignal
+from app.infrastructure.adapters.fraud.dynamodb_fraud_history_adapter import (
+    DynamoDBFraudHistoryAdapter,
+)
 from app.infrastructure.adapters.grading.rekognition_adapter import RekognitionGradingAdapter
 from app.infrastructure.adapters.sqs.sqs_human_review_adapter import SQSHumanReviewAdapter
 from app.infrastructure.aws.clients import (
@@ -66,6 +73,12 @@ class Container(containers.DeclarativeContainer):
     workflow_state_repository = providers.Singleton(
         DynamoDBWorkflowStateRepository, table=dynamodb_table
     )
+    disposition_repository = providers.Singleton(
+        DynamoDBDispositionRepository, table=dynamodb_table
+    )
+    fraud_repository = providers.Singleton(
+        DynamoDBFraudRepository, table=dynamodb_table
+    )
     image_storage = providers.Singleton(
         S3ImageStorage,
         client=s3_client,
@@ -93,8 +106,25 @@ class Container(containers.DeclarativeContainer):
         queue_url=config.provided.sqs_human_review_queue_url,
     )
 
+    demand_signal_port = providers.Singleton(InMemoryDemandSignal)
+    product_catalog_port = providers.Singleton(InMemoryProductCatalog)
+    fraud_history_port = providers.Singleton(
+        DynamoDBFraudHistoryAdapter, table=dynamodb_table
+    )
+
     confidence_gate = providers.Singleton(
         ConfidenceGate, threshold=config.provided.grading_confidence_threshold
+    )
+
+    disposition_engine = providers.Singleton(
+        DispositionEngine,
+        p2p_max_radius_km=config.provided.p2p_max_radius_km,
+    )
+
+    fraud_engine = providers.Singleton(
+        FraudEngine,
+        bulk_buy_threshold=config.provided.fraud_bulk_buy_threshold,
+        window_hours=config.provided.fraud_window_hours,
     )
 
     create_return_use_case = providers.Factory(
@@ -142,49 +172,28 @@ class Container(containers.DeclarativeContainer):
         condition_grade_repository=condition_grade_repository,
         workflow_state_repository=workflow_state_repository,
     )
-    # ------------------------------------------------------------------ Phase 4A
-    disposition_repository = providers.Singleton(
-        DynamoDBDispositionRepository, table=dynamodb_table
-    )
-
-    disposition_engine = providers.Singleton(
-        DispositionEngine,
-        p2p_max_radius_km=config.provided.p2p_max_radius_km,
-    )
-
     calculate_disposition_use_case = providers.Factory(
         CalculateDispositionUseCase,
         return_repository=return_repository,
         condition_grade_repository=condition_grade_repository,
         disposition_repository=disposition_repository,
-        demand_signal_port=providers.Object(None),
-        product_catalog_port=providers.Object(None),
+        demand_signal_port=demand_signal_port,
+        product_catalog_port=product_catalog_port,
         disposition_engine=disposition_engine,
+        fraud_history_port=fraud_history_port,
+        fraud_repository=fraud_repository,
+        fraud_engine=fraud_engine,
     )
-
     get_disposition_use_case = providers.Factory(
         GetDispositionUseCase,
         disposition_repository=disposition_repository,
     )
-
-    # ------------------------------------------------------------------ Phase 4B
-    fraud_repository = providers.Singleton(
-        DynamoDBFraudRepository, table=dynamodb_table
-    )
-
-    fraud_engine = providers.Singleton(
-        FraudEngine,
-        bulk_buy_threshold=config.provided.fraud_bulk_buy_threshold,
-        window_hours=config.provided.fraud_window_hours,
-    )
-
     assess_fraud_use_case = providers.Factory(
         AssessFraudUseCase,
-        fraud_history_port=providers.Object(None),
+        fraud_history_port=fraud_history_port,
         fraud_repository=fraud_repository,
         fraud_engine=fraud_engine,
     )
-
     get_fraud_assessment_use_case = providers.Factory(
         GetFraudAssessmentUseCase,
         fraud_repository=fraud_repository,

@@ -202,3 +202,47 @@ with `Object(None)` ports, ruff/mypy errors.
 - `mypy app` → **Success: no issues found in 108 source files**
 
 **Handoff:** Phase 4B complete. Next is Phase 4C (Health Cards + QR).
+
+---
+
+## Session: Phase 5A - Health Card Domain + QR Generation
+
+**Starting state:** Phase 4D complete (303 tests passing).
+
+**Work done:**
+1. Created QRCodeGenerationService domain service (token + URL + PNG)
+2. Created QRCodeStoragePort + LocalQRCodeStorage adapter
+3. Created HealthCard/QRToken DynamoDB mappers + repository
+4. Created GenerateHealthCardUseCase, GetHealthCardUseCase, GetHealthCardByQRUseCase
+5. Created /health-cards API endpoints (generate, get, get-by-qr)
+6. Created MatchConfidence value object (was empty from Phase 4C)
+7. Full test suite: 26 new tests
+
+**Final:** 329 passed. ruff clean. mypy clean.
+
+---
+
+## Session: Phase 5B - QR Verification + Tamper Detection
+
+**Starting state:** Phase 5A complete (329 tests passing).
+
+**Work done:**
+1. Created VerificationResult (VALID/ALREADY_SCANNED/EXPIRED/NOT_FOUND)
+2. Created TamperAlert enum (NONE/POSSIBLE_TAMPERING)
+3. Created VerificationAuditEntry for scan trail
+4. Created VerifyQrTokenUseCase with tamper detection logic
+5. Created GetVerificationHistoryUseCase
+6. Created DynamoDB verification audit repository (PK=QR#, SK=AUDIT#)
+7. Created /verify API (GET /verify/{token}, GET /verify/{token}/history)
+8. Full test suite: 23 new tests
+
+**Verification rules implemented:**
+- 1st scan: VALID, NONE ✓
+- 2nd scan: ALREADY_SCANNED, POSSIBLE_TAMPERING ✓
+- Expired: EXPIRED, NONE ✓
+- Unknown: NOT_FOUND, NONE ✓
+- Race condition: only one VALID, rest get POSSIBLE_TAMPERING ✓
+
+**Final:** 352 passed. ruff clean. mypy clean.
+
+**Handoff:** Phase 5 complete. Next: Phase 6 (SNS notifications, PreventIQ).

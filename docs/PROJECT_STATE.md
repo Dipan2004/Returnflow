@@ -1,82 +1,13 @@
 # Project State
 
-_Last updated: end of Phase 4B — Fraud Detection Engine._
+_Last updated: end of Phase 5B — QR Verification + Tamper Detection._
 
 ## Summary
 
-ReturnIQ backend is a Clean Architecture / DDD FastAPI service. The full
-Condition Assessment pipeline and Disposition Routing engine are complete:
-Rekognition CV grading, Bedrock damage description, confidence gate,
-SQS human review queue, workflow orchestration, and the smart disposition
-router with PRD-compliant recovery value calculations.
-
-## What Exists Today
-
-### Domain (`app/domain`)
-- Entities: `ReturnRequest`, `ConditionGrade`, `HumanReviewRequest`,
-  `WorkflowState`, `HealthCard`, `QRToken`, `BuyerMatch`,
-  `DispositionDecision`, `FraudAssessment`.
-- Value objects: `ReturnId` (ULID), `ImageKey`, `Grade`, `Route`,
-  `ConfidenceScore`, `Money`.
-- Domain services: `ConfidenceGate` (human review decision).
-- `app/domain/exceptions.py` — full exception taxonomy.
-
-### Application (`app/application`)
-- Ports: `ReturnRepository`, `ImageStoragePort`, `GradingPort`,
-  `DescriptionGenerationPort`, `ConditionGradeRepository`,
-  `HumanReviewQueuePort`, `WorkflowStateRepository`,
-  `HealthCardRepository`, `NotificationPort`, `PredictionPort`, `FraudPort`.
-- Services: `GradingWorkflowService` (orchestrates full grading pipeline).
-- Use cases: `CreateReturnUseCase`, `GetReturnUseCase`,
-  `GetReturnStatusUseCase`, `CompleteImageUploadUseCase`,
-  `ProcessGradingUseCase`, `GetConditionGradeUseCase`,
-  `GetWorkflowStateUseCase`, `GetReviewStatusUseCase`.
-
-### Infrastructure (`app/infrastructure`)
-- `aws/clients.py` — boto3 factories for DynamoDB, S3, Rekognition,
-  Bedrock, SQS.
-- `adapters/grading/` — `RekognitionGradingAdapter`, `grade_mapper`,
-  `models`.
-- `adapters/bedrock/` — `BedrockDescriptionAdapter`, `prompt_templates`,
-  `response_parser`.
-- `adapters/sqs/` — `SQSHumanReviewAdapter` with retry logic.
-- `persistence/` — DynamoDB repositories for ReturnRequest,
-  ConditionGrade, WorkflowState.
-- `storage/` — S3 image storage with presigned URLs.
-
-### API (`app/api`)
-- `GET /health`
-- `POST /returns`, `GET /returns/{id}`, `GET /returns/{id}/status`,
-  `POST /returns/{id}/images/complete`
-- `POST /grades` (simple grading, backward compatible)
-- `POST /grades/process` (full workflow with SQS + tracking)
-- `GET /grades/{id}` (condition grade)
-- `GET /grades/{id}/workflow` (step-by-step execution state)
-- `GET /grades/{id}/review-status` (human review status)
-
-### Tests
-- **209 tests passing.** Unit (domain, application, infrastructure) +
-  integration (API with moto-mocked AWS).
-
-## What Is NOT Implemented Yet
-
-- Health Card Generation + QR code + tamper verification.
-- SNS/SES Buyer Notifications.
-- SageMaker PreventIQ (return prediction).
-- Flywheel Dashboard APIs.
-- Real DemandSignalPort / ProductCatalogPort / FraudHistoryPort adapters.
-- Step Functions ASL template (deployed via SAM, not in app code).
-- Authentication (API key / Cognito).
-
-## How To Run
-
-```bash
-make install
-docker compose up -d          # dynamodb-local + admin UI on :8002
-cp .env.example .env          # adjust endpoints
-make dev                      # uvicorn --reload on :8000
-make check                    # ruff + mypy + pytest
-```
+ReturnIQ backend is a Clean Architecture / DDD FastAPI service. The complete
+returns pipeline is implemented: condition grading, damage description,
+disposition routing, fraud detection, buyer matching, health card generation,
+QR token issuance, and tamper-evident verification.
 
 ## Phase History
 
@@ -84,17 +15,66 @@ make check                    # ruff + mypy + pytest
 |---|---|---|
 | 1 | Domain Foundation | ✅ Complete |
 | 2 | Return Intake APIs | ✅ Complete |
-| 3A | Condition Grading Core (Rekognition) | ✅ Complete |
+| 3A | Condition Grading (Rekognition) | ✅ Complete |
 | 3Ba | Bedrock Damage Description | ✅ Complete |
-| 3Bb | Human Review Queue + Workflow | ✅ Complete |
+| 3Bb | Workflow + Human Review Queue | ✅ Complete |
 | 4A | Disposition Engine | ✅ Complete |
 | 4B | Fraud Detection Engine | ✅ Complete |
-| 4C | Health Cards + QR + Notifications | 🔜 Next |
+| 4C | Buyer Matching | ✅ Complete |
+| 4D | Routing Orchestration | ✅ Complete |
+| 5A | Health Card + QR Generation | ✅ Complete |
+| 5B | QR Verification + Tamper Detection | ✅ Complete |
+| 6 | SNS Notifications + PreventIQ | 🔜 Next |
 
-## Next Phase (Phase 4B - Recommended)
+## Current Validation
 
-Build fraud detection + health cards + notifications:
-1. `FraudCheckService` with bulk-buy detection.
-2. `HealthCardGenerator` + QR code generation.
-3. SNS buyer notification adapter.
-4. API endpoints for health cards and verification.
+- **352 tests passing**
+- ruff check: PASS
+- mypy app: PASS (159 source files)
+
+## API Endpoints
+
+| Method | Path | Phase |
+|--------|------|-------|
+| GET | /health | 1 |
+| POST | /returns | 2 |
+| GET | /returns/{id} | 2 |
+| GET | /returns/{id}/status | 2 |
+| POST | /returns/{id}/images/complete | 2 |
+| POST | /grades | 3A |
+| POST | /grades/process | 3Bb |
+| GET | /grades/{id} | 3A |
+| GET | /grades/{id}/workflow | 3Bb |
+| GET | /grades/{id}/review-status | 3Bb |
+| POST | /dispositions/calculate | 4A |
+| POST | /dispositions/calculate/{return_id} | 4D |
+| GET | /dispositions/{id} | 4A |
+| POST | /fraud/assess | 4B |
+| GET | /fraud/{id} | 4B |
+| POST | /buyer-match/compute | 4C |
+| GET | /buyer-match/{id} | 4C |
+| POST | /health-cards/generate/{return_id} | 5A |
+| GET | /health-cards/{id} | 5A |
+| GET | /health-cards/by-qr/{token} | 5A |
+| GET | /verify/{qr_token} | 5B |
+| GET | /verify/{qr_token}/history | 5B |
+
+## What Is NOT Implemented Yet
+
+- SNS/SES Buyer Notifications
+- SageMaker PreventIQ (return prediction)
+- Flywheel Dashboard APIs
+- Step Functions ASL template
+- Authentication (API key / Cognito)
+
+## How To Run
+
+```bash
+pip install -e ".[dev]"
+docker compose up -d
+cp .env.example .env
+uvicorn app.main:app --reload --port 8000
+pytest tests/
+ruff check .
+mypy app --ignore-missing-imports
+```

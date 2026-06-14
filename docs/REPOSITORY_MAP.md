@@ -24,10 +24,11 @@ app/
       health_card.py                      Health Card aggregate (future)
       qr_token.py                         Tamper-evident QR token (future)
       buyer_match.py                      P2P buyer match (future)
-      disposition_decision.py             Routing decision (future)
+      disposition_decision.py             Routing decision entity (Phase 4A)
       fraud_assessment.py                 Fraud check result (future)
     services/
       human_review_decision.py            ConfidenceGate service (Phase 3A)
+      disposition_engine.py               DispositionEngine routing rules (Phase 4A)
     events/                               Domain events (return_submitted,
                                            grading_completed, disposition_routed)
 
@@ -44,10 +45,14 @@ app/
       notification_port.py                NotificationPort (not yet impl.)
       prediction_port.py                  PredictionPort (not yet impl.)
       fraud_port.py                       FraudPort (not yet impl.)
+      demand_signal_port.py               DemandSignalPort (Phase 4A - stub)
+      product_catalog_port.py             ProductCatalogPort (Phase 4A - stub)
+      disposition_repository.py           DispositionRepository (Phase 4A - impl)
     services/
       grading_workflow_service.py         Full grading pipeline orchestration (Phase 3Bb)
     use_cases/
       dto.py                              Shared result DTOs
+      disposition_dto.py                  Disposition request/response DTOs (Phase 4A)
       create_return_use_case.py           POST /returns
       get_return_use_case.py              GET /returns/{id}
       get_return_status_use_case.py       GET /returns/{id}/status
@@ -56,6 +61,8 @@ app/
       get_condition_grade_use_case.py     GET /grades/{id}
       get_workflow_state_use_case.py      GET /grades/{id}/workflow
       get_review_status_use_case.py       GET /grades/{id}/review-status
+      calculate_disposition_use_case.py   POST /dispositions/calculate (Phase 4A)
+      get_disposition_use_case.py         GET /dispositions/{id} (Phase 4A)
 
   infrastructure/
     logging.py                            structlog configuration
@@ -79,6 +86,8 @@ app/
       dynamodb_condition_grade_repository.py  ConditionGradeRepository impl.
       workflow_state_mapper.py            WorkflowState <-> DynamoDB item
       dynamodb_workflow_state_repository.py   WorkflowStateRepository impl.
+      disposition_mapper.py               DispositionDecision <-> DynamoDB item (Phase 4A)
+      dynamodb_disposition_repository.py  DispositionRepository impl. (Phase 4A)
     storage/
       s3_image_storage.py                 ImageStoragePort impl.
 
@@ -87,10 +96,12 @@ app/
       health.py                           GET /health
       returns.py                          Phase 2 return intake endpoints
       grades.py                           Phase 3 grading + workflow endpoints
+      dispositions.py                     Phase 4A disposition routing endpoints
     schemas/
       common.py                           BaseSchema, error/health schemas
       return_schemas.py                   Phase 2 request/response models
       grade_schemas.py                    Grading, workflow, review schemas
+      disposition_schemas.py              Disposition request/response schemas (Phase 4A)
       health_card_schemas.py              Health Card schemas (future)
       prediction_schemas.py               PreventIQ schemas (future)
 
@@ -131,6 +142,7 @@ docs/
 | Return Request | `RETURN#{id}` | `REQUEST` | `SELLER#{seller_id}` / `RETURN#{ts}#{id}` | `BUYER#{buyer_id}` / `RETURN#{ts}#{id}` |
 | Condition Grade | `RETURN#{id}` | `CONDITION_GRADE` | — | — |
 | Workflow State | `RETURN#{id}` | `WORKFLOW_STATE` | — | — |
+| Disposition | `RETURN#{id}` | `DISPOSITION` | — | — |
 | Health Card | `RETURN#{id}` | `HEALTH_CARD` | `SELLER#{seller_id}` / ... | `BUYER#{buyer_id}` / ... |
 | QR Token | `QR#{token}` | `META` | — | — |
 | Fraud Record | `FRAUD#{buyer_id}` | `SKU#{sku_id}` | — | — |

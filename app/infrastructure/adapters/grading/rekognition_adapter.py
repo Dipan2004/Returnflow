@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from botocore.exceptions import ClientError
 
@@ -59,11 +59,12 @@ class RekognitionGradingAdapter(GradingPort):
 
     async def _detect_labels(self, bucket: str, key: str) -> list[RawLabel]:
         try:
-            response: dict[str, Any] = await asyncio.to_thread(
-                self._client.detect_labels,
-                Image={"S3Object": {"Bucket": bucket, "Name": key}},
-                MaxLabels=self._max_labels,
-                MinConfidence=self._min_confidence,
+            response = await asyncio.to_thread(
+                lambda: self._client.detect_labels(
+                    Image={"S3Object": {"Bucket": bucket, "Name": key}},
+                    MaxLabels=self._max_labels,
+                    MinConfidence=self._min_confidence,
+                )
             )
         except ClientError as exc:
             raise InfrastructureError("Rekognition", str(exc)) from exc

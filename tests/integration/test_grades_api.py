@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import boto3
 import pytest
@@ -66,9 +66,8 @@ def client(aws_credentials: None) -> Iterator[TestClient]:
 
         with patch.dict(
             "os.environ", {"SQS_HUMAN_REVIEW_QUEUE_URL": queue_url}
-        ):
-            with TestClient(app) as test_client:
-                yield test_client
+        ), TestClient(app) as test_client:
+            yield test_client
 
 
 @pytest.fixture

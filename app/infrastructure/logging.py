@@ -9,7 +9,7 @@ from app.config import AppConfig, get_config
 try:
     import structlog
 except ModuleNotFoundError:
-    structlog = None
+    structlog = None  # type: ignore[assignment]
 
 _configured = False
 

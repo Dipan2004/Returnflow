@@ -1,8 +1,6 @@
 # tests/unit/infrastructure/test_grade_mapper.py
 from __future__ import annotations
 
-import pytest
-
 from app.domain.value_objects.grade import Grade
 from app.infrastructure.adapters.grading.grade_mapper import map_grade
 from app.infrastructure.adapters.grading.models import AggregatedLabelSet, RawLabel
@@ -60,5 +58,5 @@ def test_multi_image_aggregation_takes_max_confidence() -> None:
     set1 = [RawLabel(name="Scratch", confidence=70.0)]
     set2 = [RawLabel(name="Scratch", confidence=85.0)]
     aggregated = AggregatedLabelSet.from_multi_image_results([set1, set2])
-    scratch = next(l for l in aggregated.labels if l.name == "Scratch")
+    scratch = next(lbl for lbl in aggregated.labels if lbl.name == "Scratch")
     assert scratch.confidence == 85.0

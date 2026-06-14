@@ -32,9 +32,9 @@ _GRADE_THRESHOLDS: list[tuple[float, Grade]] = [
 
 def extract_damage_labels(label_set: AggregatedLabelSet) -> list[DamageLabel]:
     return [
-        DamageLabel(name=l.name, confidence=round(l.confidence, 1))
-        for l in label_set.labels
-        if l.name in _DAMAGE_LABEL_NAMES
+        DamageLabel(name=label.name, confidence=round(label.confidence, 1))
+        for label in label_set.labels
+        if label.name in _DAMAGE_LABEL_NAMES
     ]
 
 

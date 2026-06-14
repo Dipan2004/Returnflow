@@ -118,3 +118,48 @@ into RekognitionGradingAdapter. Updated container wiring.
 
 **Handoff:** Phase 3 complete. Next is Phase 4 (Disposition Routing +
 Fraud Detection). Use `docs/PROJECT_RECOVERY_PROMPT.md` to resume.
+
+---
+
+## Session: Phase 4A - Disposition Engine (Recovery + Completion)
+
+**Starting state:** Phase 4A partially implemented but broken — empty
+`disposition_dto.py`, misplaced `disposition_engine.py`, container wired
+with `Object(None)` ports, ruff/mypy errors.
+
+**Audit findings:**
+1. `disposition_dto.py` was empty (0 bytes) — missing DTOs caused ImportError.
+2. `DispositionEngine` file at `app/application/services/` but imports
+   referenced `app.domain.services.disposition_engine` — module not found.
+3. Unused import `ReturnId` in `demand_signal_port.py`.
+4. Container ports wired as `Object(None)` — acceptable for runtime
+   (real adapters deferred) but tests use proper fakes.
+
+**Fixes applied:**
+1. Created `disposition_dto.py` with `DispositionRequest`, `RecoveryBreakdown`,
+   `DispositionResponse` dataclasses.
+2. Created `app/domain/services/disposition_engine.py` (canonical location).
+   Deleted duplicate from `app/application/services/`.
+3. Removed unused import from `demand_signal_port.py`.
+4. Fixed ruff issues: E501 line lengths (prompt_templates, tests),
+   E741 ambiguous variables (`l` → `label`/`lbl`), SIM117 nested withs,
+   I001 import sorting, F401 unused imports, UP017 datetime.UTC alias.
+5. Fixed mypy: `structlog = None` type ignore, rekognition adapter
+   `to_thread` type incompatibility (removed explicit annotation).
+
+**Final verification:**
+- `pytest` → **162 passed**
+- `ruff check .` → **All checks passed!**
+- `mypy app` → **Success: no issues found in 98 source files**
+
+**Business rules verified against PRD:**
+- Grade A + demand → P2P (65% recovery) ✓
+- Grade A no demand → RESELL (75%) ✓
+- Grade B → REFURBISH (55%) ✓
+- Grade C → DONATE (0%) ✓
+- SCRAP → SCRAP (0%) ✓
+- Liquidation baseline = 5% ✓
+- Value delta = recovery - liquidation ✓
+- Fraud flag forces RESELL ✓
+
+**Handoff:** Phase 4A complete. Next is Phase 4B (Fraud + Health Cards).

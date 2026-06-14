@@ -8,8 +8,8 @@ from app.domain.entities.condition_grade import ConditionGrade
 from app.domain.exceptions import EntityNotFoundError
 from app.domain.value_objects.grade import Grade
 from app.domain.value_objects.return_id import ReturnId
-from tests.fakes.fake_condition_grade_repository import FakeConditionGradeRepository
 from tests.factories.domain_factories import make_return_request
+from tests.fakes.fake_condition_grade_repository import FakeConditionGradeRepository
 
 
 def _make_grade(return_id: ReturnId) -> ConditionGrade:

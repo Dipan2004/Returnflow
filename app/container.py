@@ -4,15 +4,20 @@ from __future__ import annotations
 from dependency_injector import containers, providers
 
 from app.application.services.grading_workflow_service import GradingWorkflowService
+from app.application.use_cases.calculate_disposition_use_case import (
+    CalculateDispositionUseCase,
+)
 from app.application.use_cases.complete_image_upload_use_case import CompleteImageUploadUseCase
 from app.application.use_cases.create_return_use_case import CreateReturnUseCase
 from app.application.use_cases.get_condition_grade_use_case import GetConditionGradeUseCase
+from app.application.use_cases.get_disposition_use_case import GetDispositionUseCase
 from app.application.use_cases.get_return_status_use_case import GetReturnStatusUseCase
 from app.application.use_cases.get_return_use_case import GetReturnUseCase
 from app.application.use_cases.get_review_status_use_case import GetReviewStatusUseCase
 from app.application.use_cases.get_workflow_state_use_case import GetWorkflowStateUseCase
 from app.application.use_cases.process_grading_use_case import ProcessGradingUseCase
 from app.config import AppConfig, get_config
+from app.domain.services.disposition_engine import DispositionEngine
 from app.domain.services.human_review_decision import ConfidenceGate
 from app.infrastructure.adapters.bedrock.bedrock_description_adapter import (
     BedrockDescriptionAdapter,
@@ -28,6 +33,9 @@ from app.infrastructure.aws.clients import (
 )
 from app.infrastructure.persistence.dynamodb_condition_grade_repository import (
     DynamoDBConditionGradeRepository,
+)
+from app.infrastructure.persistence.dynamodb_disposition_repository import (
+    DynamoDBDispositionRepository,
 )
 from app.infrastructure.persistence.dynamodb_return_repository import DynamoDBReturnRepository
 from app.infrastructure.persistence.dynamodb_workflow_state_repository import (
@@ -129,4 +137,28 @@ class Container(containers.DeclarativeContainer):
         GetReviewStatusUseCase,
         condition_grade_repository=condition_grade_repository,
         workflow_state_repository=workflow_state_repository,
+    )
+    # ------------------------------------------------------------------ Phase 4A
+    disposition_repository = providers.Singleton(
+        DynamoDBDispositionRepository, table=dynamodb_table
+    )
+
+    disposition_engine = providers.Singleton(
+        DispositionEngine,
+        p2p_max_radius_km=config.provided.p2p_max_radius_km,
+    )
+
+    calculate_disposition_use_case = providers.Factory(
+        CalculateDispositionUseCase,
+        return_repository=return_repository,
+        condition_grade_repository=condition_grade_repository,
+        disposition_repository=disposition_repository,
+        demand_signal_port=providers.Object(None),
+        product_catalog_port=providers.Object(None),
+        disposition_engine=disposition_engine,
+    )
+
+    get_disposition_use_case = providers.Factory(
+        GetDispositionUseCase,
+        disposition_repository=disposition_repository,
     )

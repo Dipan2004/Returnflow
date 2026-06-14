@@ -1,13 +1,14 @@
 # Project State
 
-_Last updated: end of Phase 3Bb — Human Review Queue + Grading Workflow._
+_Last updated: end of Phase 4A — Disposition Engine._
 
 ## Summary
 
 ReturnIQ backend is a Clean Architecture / DDD FastAPI service. The full
-Condition Assessment pipeline is now complete: Rekognition CV grading,
-Bedrock damage description, confidence gate, SQS human review queue,
-and workflow orchestration — all tested and passing.
+Condition Assessment pipeline and Disposition Routing engine are complete:
+Rekognition CV grading, Bedrock damage description, confidence gate,
+SQS human review queue, workflow orchestration, and the smart disposition
+router with PRD-compliant recovery value calculations.
 
 ## What Exists Today
 
@@ -54,18 +55,17 @@ and workflow orchestration — all tested and passing.
 - `GET /grades/{id}/review-status` (human review status)
 
 ### Tests
-- **95 tests passing.** Unit (domain, application, infrastructure) +
+- **162 tests passing.** Unit (domain, application, infrastructure) +
   integration (API with moto-mocked AWS).
-- Coverage: new Phase 3B code at 90%+.
 
 ## What Is NOT Implemented Yet
 
-- Disposition Router (Grade → Route decision engine).
 - Fraud Detection Layer.
 - Health Card Generation + QR code + tamper verification.
 - SNS/SES Buyer Notifications.
 - SageMaker PreventIQ (return prediction).
 - Flywheel Dashboard APIs.
+- Real DemandSignalPort / ProductCatalogPort adapters (wired as None stubs).
 - Step Functions ASL template (deployed via SAM, not in app code).
 - Authentication (API key / Cognito).
 
@@ -88,13 +88,13 @@ make check                    # ruff + mypy + pytest
 | 3A | Condition Grading Core (Rekognition) | ✅ Complete |
 | 3Ba | Bedrock Damage Description | ✅ Complete |
 | 3Bb | Human Review Queue + Workflow | ✅ Complete |
-| 4 | Disposition Router + Fraud | 🔜 Next |
+| 4A | Disposition Engine | ✅ Complete |
+| 4B | Fraud + Health Cards + Notifications | 🔜 Next |
 
-## Next Phase (Phase 4 - Recommended)
+## Next Phase (Phase 4B - Recommended)
 
-Build the disposition routing pipeline:
-1. `DispositionRouter` domain service with Grade→Route decision tree.
-2. `FraudCheckService` with bulk-buy detection.
-3. `HealthCardGenerator` + QR code generation.
-4. SNS buyer notification adapter.
-5. API endpoints for health cards and disposition.
+Build fraud detection + health cards + notifications:
+1. `FraudCheckService` with bulk-buy detection.
+2. `HealthCardGenerator` + QR code generation.
+3. SNS buyer notification adapter.
+4. API endpoints for health cards and verification.

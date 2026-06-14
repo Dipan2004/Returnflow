@@ -8,10 +8,10 @@ from app.domain.entities.condition_grade import DamageLabel
 from app.domain.exceptions import EntityNotFoundError
 from app.domain.services.human_review_decision import ConfidenceGate
 from app.domain.value_objects.grade import Grade
+from tests.factories.domain_factories import make_return_request
 from tests.fakes.fake_condition_grade_repository import FakeConditionGradeRepository
 from tests.fakes.fake_grading_port import FakeGradingPort
 from tests.fakes.fake_return_repository import FakeReturnRepository
-from tests.factories.domain_factories import make_return_request
 
 
 def _make_use_case(

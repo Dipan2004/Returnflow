@@ -29,5 +29,5 @@ class AggregatedLabelSet:
 
     def filter_by_min_confidence(self, min_confidence: float) -> AggregatedLabelSet:
         return AggregatedLabelSet(
-            labels=[l for l in self.labels if l.confidence >= min_confidence]
+            labels=[lbl for lbl in self.labels if lbl.confidence >= min_confidence]
         )

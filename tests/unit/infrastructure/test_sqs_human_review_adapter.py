@@ -106,9 +106,9 @@ async def test_publish_raises_after_exhausting_retries() -> None:
     adapter = _make_adapter(client, max_retries=1)
     request = _make_review_request()
 
-    with patch("asyncio.sleep", new_callable=AsyncMock):
-        with pytest.raises(InfrastructureError, match="Failed to publish"):
-            await adapter.publish(request)
+    with patch("asyncio.sleep", new_callable=AsyncMock), \
+         pytest.raises(InfrastructureError, match="Failed to publish"):
+        await adapter.publish(request)
 
     assert client.send_message.call_count == 2
 

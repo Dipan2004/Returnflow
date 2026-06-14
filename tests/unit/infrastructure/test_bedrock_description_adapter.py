@@ -9,11 +9,10 @@ import pytest
 
 from app.application.ports.description_generation_port import DescriptionRequest
 from app.domain.entities.condition_grade import DamageLabel
-from app.domain.exceptions import InfrastructureError
 from app.domain.value_objects.grade import Grade
 from app.infrastructure.adapters.bedrock.bedrock_description_adapter import (
-    BedrockDescriptionAdapter,
     _NO_DAMAGE_DESCRIPTION,
+    BedrockDescriptionAdapter,
 )
 
 

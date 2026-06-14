@@ -5,7 +5,7 @@ import pytest
 
 from app.application.use_cases.get_review_status_use_case import GetReviewStatusUseCase
 from app.domain.entities.condition_grade import ConditionGrade, DamageLabel
-from app.domain.entities.workflow_state import WorkflowState, WorkflowStep
+from app.domain.entities.workflow_state import WorkflowState
 from app.domain.exceptions import EntityNotFoundError
 from app.domain.value_objects.grade import Grade
 from app.domain.value_objects.image_key import ImageKey

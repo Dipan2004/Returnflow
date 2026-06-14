@@ -1,23 +1,13 @@
-# app/api/schemas/health_card_schemas.py
+# app/application/use_cases/health_card_dto.py
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel
 
-
-class GenerateHealthCardResponse(BaseModel):
-    return_id: str
-    qr_token: str
-    verification_url: str
-    route: str
-    condition_grade: str
-    recovery_value: Decimal
-    created_at: datetime
-
-
-class HealthCardDetailResponse(BaseModel):
+@dataclass(frozen=True)
+class HealthCardResponse:
     return_id: str
     sku_id: str
     grade: str
@@ -34,3 +24,14 @@ class HealthCardDetailResponse(BaseModel):
     created_at: datetime
     fraud_risk: str
     buyer_match_used: bool
+
+
+@dataclass(frozen=True)
+class GenerateHealthCardResult:
+    return_id: str
+    qr_token: str
+    verification_url: str
+    route: str
+    condition_grade: str
+    recovery_value: Decimal
+    created_at: datetime

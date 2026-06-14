@@ -10,21 +10,29 @@ from app.application.use_cases.calculate_disposition_use_case import (
 )
 from app.application.use_cases.complete_image_upload_use_case import CompleteImageUploadUseCase
 from app.application.use_cases.create_return_use_case import CreateReturnUseCase
+from app.application.use_cases.generate_health_card_use_case import GenerateHealthCardUseCase
 from app.application.use_cases.get_buyer_match_use_case import GetBuyerMatchUseCase
 from app.application.use_cases.get_condition_grade_use_case import GetConditionGradeUseCase
 from app.application.use_cases.get_disposition_use_case import GetDispositionUseCase
 from app.application.use_cases.get_fraud_assessment_use_case import GetFraudAssessmentUseCase
+from app.application.use_cases.get_health_card_by_qr_use_case import GetHealthCardByQRUseCase
+from app.application.use_cases.get_health_card_use_case import GetHealthCardUseCase
 from app.application.use_cases.get_return_status_use_case import GetReturnStatusUseCase
 from app.application.use_cases.get_return_use_case import GetReturnUseCase
 from app.application.use_cases.get_review_status_use_case import GetReviewStatusUseCase
 from app.application.use_cases.get_workflow_state_use_case import GetWorkflowStateUseCase
 from app.application.use_cases.match_buyer_use_case import MatchBuyerUseCase
+from app.application.use_cases.orchestrate_disposition_use_case import (
+    OrchestrateDispositionUseCase,
+)
 from app.application.use_cases.process_grading_use_case import ProcessGradingUseCase
 from app.config import AppConfig, get_config
 from app.domain.services.buyer_matching_engine import BuyerMatchingEngine
 from app.domain.services.disposition_engine import DispositionEngine
+from app.domain.services.disposition_orchestrator import DispositionOrchestrator
 from app.domain.services.fraud_engine import FraudEngine
 from app.domain.services.human_review_decision import ConfidenceGate
+from app.domain.services.qr_generation_service import QRCodeGenerationService
 from app.infrastructure.adapters.bedrock.bedrock_description_adapter import (
     BedrockDescriptionAdapter,
 )
@@ -40,6 +48,7 @@ from app.infrastructure.adapters.fraud.dynamodb_fraud_history_adapter import (
     DynamoDBFraudHistoryAdapter,
 )
 from app.infrastructure.adapters.grading.rekognition_adapter import RekognitionGradingAdapter
+from app.infrastructure.adapters.qr_storage.local_qr_storage import LocalQRCodeStorage
 from app.infrastructure.adapters.sqs.sqs_human_review_adapter import SQSHumanReviewAdapter
 from app.infrastructure.aws.clients import (
     build_bedrock_client,
@@ -58,6 +67,9 @@ from app.infrastructure.persistence.dynamodb_disposition_repository import (
     DynamoDBDispositionRepository,
 )
 from app.infrastructure.persistence.dynamodb_fraud_repository import DynamoDBFraudRepository
+from app.infrastructure.persistence.dynamodb_health_card_repository import (
+    DynamoDBHealthCardRepository,
+)
 from app.infrastructure.persistence.dynamodb_return_repository import DynamoDBReturnRepository
 from app.infrastructure.persistence.dynamodb_workflow_state_repository import (
     DynamoDBWorkflowStateRepository,
@@ -86,9 +98,7 @@ class Container(containers.DeclarativeContainer):
     disposition_repository = providers.Singleton(
         DynamoDBDispositionRepository, table=dynamodb_table
     )
-    fraud_repository = providers.Singleton(
-        DynamoDBFraudRepository, table=dynamodb_table
-    )
+    fraud_repository = providers.Singleton(DynamoDBFraudRepository, table=dynamodb_table)
     image_storage = providers.Singleton(
         S3ImageStorage,
         client=s3_client,
@@ -118,9 +128,7 @@ class Container(containers.DeclarativeContainer):
 
     demand_signal_port = providers.Singleton(InMemoryDemandSignal)
     product_catalog_port = providers.Singleton(InMemoryProductCatalog)
-    fraud_history_port = providers.Singleton(
-        DynamoDBFraudHistoryAdapter, table=dynamodb_table
-    )
+    fraud_history_port = providers.Singleton(DynamoDBFraudHistoryAdapter, table=dynamodb_table)
 
     confidence_gate = providers.Singleton(
         ConfidenceGate, threshold=config.provided.grading_confidence_threshold
@@ -211,9 +219,7 @@ class Container(containers.DeclarativeContainer):
 
     demand_index_port = providers.Singleton(InMemoryDemandIndex)
     buyer_matching_port = providers.Singleton(InMemoryBuyerMatchingAdapter)
-    buyer_match_repository = providers.Singleton(
-        DynamoDBBuyerMatchRepository, table=dynamodb_table
-    )
+    buyer_match_repository = providers.Singleton(DynamoDBBuyerMatchRepository, table=dynamodb_table)
     buyer_matching_engine = providers.Singleton(BuyerMatchingEngine)
 
     match_buyer_use_case = providers.Factory(
@@ -226,4 +232,50 @@ class Container(containers.DeclarativeContainer):
     get_buyer_match_use_case = providers.Factory(
         GetBuyerMatchUseCase,
         buyer_match_repository=buyer_match_repository,
+    )
+
+    disposition_orchestrator = providers.Singleton(
+        DispositionOrchestrator,
+        p2p_max_radius_km=config.provided.p2p_max_radius_km,
+    )
+
+    orchestrate_disposition_use_case = providers.Factory(
+        OrchestrateDispositionUseCase,
+        return_repository=return_repository,
+        condition_grade_repository=condition_grade_repository,
+        fraud_repository=fraud_repository,
+        buyer_match_repository=buyer_match_repository,
+        disposition_repository=disposition_repository,
+        product_catalog_port=product_catalog_port,
+        orchestrator=disposition_orchestrator,
+    )
+
+    health_card_repository = providers.Singleton(DynamoDBHealthCardRepository, table=dynamodb_table)
+
+    qr_storage_port = providers.Singleton(LocalQRCodeStorage, base_url=config.provided.base_url)
+
+    qr_generation_service = providers.Singleton(
+        QRCodeGenerationService,
+        base_url=config.provided.base_url,
+        ttl_hours=config.provided.qr_token_ttl_hours,
+    )
+
+    generate_health_card_use_case = providers.Factory(
+        GenerateHealthCardUseCase,
+        condition_grade_repository=condition_grade_repository,
+        disposition_repository=disposition_repository,
+        fraud_repository=fraud_repository,
+        health_card_repository=health_card_repository,
+        qr_storage_port=qr_storage_port,
+        qr_generation_service=qr_generation_service,
+    )
+
+    get_health_card_use_case = providers.Factory(
+        GetHealthCardUseCase,
+        health_card_repository=health_card_repository,
+    )
+
+    get_health_card_by_qr_use_case = providers.Factory(
+        GetHealthCardByQRUseCase,
+        health_card_repository=health_card_repository,
     )

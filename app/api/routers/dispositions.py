@@ -9,14 +9,48 @@ from app.api.schemas.disposition_schemas import (
     DispositionResponse,
     RecoveryBreakdownResponse,
 )
+from app.api.schemas.orchestration_schemas import OrchestrationResponseSchema
 from app.application.use_cases.calculate_disposition_use_case import (
     CalculateDispositionUseCase,
 )
 from app.application.use_cases.disposition_dto import DispositionRequest
 from app.application.use_cases.get_disposition_use_case import GetDispositionUseCase
+from app.application.use_cases.orchestrate_disposition_use_case import (
+    OrchestrateDispositionUseCase,
+)
 from app.container import Container
 
 router = APIRouter(prefix="/dispositions", tags=["disposition"])
+
+
+@router.post(
+    "/calculate/{return_id}",
+    response_model=OrchestrationResponseSchema,
+    status_code=200,
+)
+@inject
+async def orchestrate_disposition(
+    return_id: str,
+    use_case: OrchestrateDispositionUseCase = Depends(
+        Provide[Container.orchestrate_disposition_use_case]
+    ),
+) -> OrchestrationResponseSchema:
+    result = await use_case.execute(return_id)
+    return OrchestrationResponseSchema(
+        return_id=result.return_id,
+        route=result.route,
+        recovery_value=result.recovery_value,
+        decision_reason=result.decision_reason,
+        fraud_override_applied=result.fraud_override_applied,
+        buyer_match_used=result.buyer_match_used,
+        demand_score=result.demand_score,
+        confidence=result.confidence,
+        grade=result.grade,
+        liquidation_baseline=result.liquidation_baseline,
+        value_delta=result.value_delta,
+        recovery_percentage=result.recovery_percentage,
+        decided_at=result.decided_at,
+    )
 
 
 @router.post("/calculate", response_model=DispositionResponse, status_code=200)

@@ -8,7 +8,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api.routers import buyer_match, dispositions, fraud, grades, health, returns
+from app.api.routers import buyer_match, dispositions, fraud, grades, health, health_cards, returns
 from app.config import get_config
 from app.container import Container
 from app.domain.exceptions import (
@@ -68,13 +68,12 @@ def create_app() -> FastAPI:
     application.include_router(returns.router)
     application.include_router(grades.router)
     application.include_router(dispositions.router)
+    application.include_router(health_cards.router)
     application.include_router(fraud.router)
     application.include_router(buyer_match.router)
 
     @application.exception_handler(EntityNotFoundError)
-    async def entity_not_found_handler(
-        request: Request, exc: EntityNotFoundError
-    ) -> JSONResponse:
+    async def entity_not_found_handler(request: Request, exc: EntityNotFoundError) -> JSONResponse:
         return JSONResponse(
             status_code=404,
             content={"errors": [{"code": exc.code, "message": exc.message}]},
@@ -108,45 +107,35 @@ def create_app() -> FastAPI:
         )
 
     @application.exception_handler(ImageUploadError)
-    async def image_upload_error_handler(
-        request: Request, exc: ImageUploadError
-    ) -> JSONResponse:
+    async def image_upload_error_handler(request: Request, exc: ImageUploadError) -> JSONResponse:
         return JSONResponse(
             status_code=422,
             content={"errors": [{"code": exc.code, "message": exc.message}]},
         )
 
     @application.exception_handler(FraudFlaggedError)
-    async def fraud_flagged_handler(
-        request: Request, exc: FraudFlaggedError
-    ) -> JSONResponse:
+    async def fraud_flagged_handler(request: Request, exc: FraudFlaggedError) -> JSONResponse:
         return JSONResponse(
             status_code=403,
             content={"errors": [{"code": exc.code, "message": exc.message}]},
         )
 
     @application.exception_handler(QRTokenAlreadyScannedError)
-    async def qr_scanned_handler(
-        request: Request, exc: QRTokenAlreadyScannedError
-    ) -> JSONResponse:
+    async def qr_scanned_handler(request: Request, exc: QRTokenAlreadyScannedError) -> JSONResponse:
         return JSONResponse(
             status_code=409,
             content={"errors": [{"code": exc.code, "message": exc.message}]},
         )
 
     @application.exception_handler(QRTokenNotFoundError)
-    async def qr_not_found_handler(
-        request: Request, exc: QRTokenNotFoundError
-    ) -> JSONResponse:
+    async def qr_not_found_handler(request: Request, exc: QRTokenNotFoundError) -> JSONResponse:
         return JSONResponse(
             status_code=404,
             content={"errors": [{"code": exc.code, "message": exc.message}]},
         )
 
     @application.exception_handler(InfrastructureError)
-    async def infrastructure_handler(
-        request: Request, exc: InfrastructureError
-    ) -> JSONResponse:
+    async def infrastructure_handler(request: Request, exc: InfrastructureError) -> JSONResponse:
         logger.error("Infrastructure error", service=exc.service, message=exc.message)
         return JSONResponse(
             status_code=503,
@@ -154,9 +143,7 @@ def create_app() -> FastAPI:
         )
 
     @application.exception_handler(ReturnIQError)
-    async def returniq_base_handler(
-        request: Request, exc: ReturnIQError
-    ) -> JSONResponse:
+    async def returniq_base_handler(request: Request, exc: ReturnIQError) -> JSONResponse:
         logger.error("Unhandled ReturnIQ error", code=exc.code, message=exc.message)
         return JSONResponse(
             status_code=500,

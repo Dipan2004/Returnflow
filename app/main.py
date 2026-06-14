@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 from app.api.routers import (
     buyer_match,
     dashboard,
+    delivery,
     dispositions,
     fraud,
     grades,
@@ -21,6 +22,7 @@ from app.api.routers import (
     returns,
     verify,
 )
+from app.api.security.api_key import verify_api_key
 from app.config import get_config
 from app.container import Container
 from app.domain.exceptions import (
@@ -70,11 +72,21 @@ def create_app() -> FastAPI:
 
     application.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"] if config.is_local else [config.base_url],
+        allow_origins=(
+            ["http://localhost:5173", "http://localhost:3000", "http://localhost:8000"]
+            if config.is_local
+            else [config.base_url]
+        ),
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    @application.middleware("http")
+    async def api_key_middleware(request: Request, call_next):  # type: ignore[no-untyped-def]
+        await verify_api_key(request)
+        response = await call_next(request)
+        return response
 
     application.include_router(health.router)
     application.include_router(returns.router)
@@ -87,6 +99,7 @@ def create_app() -> FastAPI:
     application.include_router(outcomes.router)
     application.include_router(predict.router)
     application.include_router(dashboard.router)
+    application.include_router(delivery.router)
 
     @application.exception_handler(EntityNotFoundError)
     async def entity_not_found_handler(request: Request, exc: EntityNotFoundError) -> JSONResponse:
@@ -137,7 +150,9 @@ def create_app() -> FastAPI:
         )
 
     @application.exception_handler(QRTokenAlreadyScannedError)
-    async def qr_scanned_handler(request: Request, exc: QRTokenAlreadyScannedError) -> JSONResponse:
+    async def qr_scanned_handler(
+        request: Request, exc: QRTokenAlreadyScannedError
+    ) -> JSONResponse:
         return JSONResponse(
             status_code=409,
             content={"errors": [{"code": exc.code, "message": exc.message}]},

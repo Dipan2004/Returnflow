@@ -21,7 +21,27 @@ def build_dynamodb_table(config: AppConfig) -> Table:
     if config.dynamodb_endpoint_url:
         kwargs["endpoint_url"] = config.dynamodb_endpoint_url
     resource = boto3.resource("dynamodb", **kwargs)
-    return resource.Table(config.dynamodb_table_name)
+    table = resource.Table(config.dynamodb_table_name)
+
+    if config.is_local:
+        try:
+            table.load()
+        except resource.meta.client.exceptions.ResourceNotFoundException:
+            table = resource.create_table(
+                TableName=config.dynamodb_table_name,
+                KeySchema=[
+                    {"AttributeName": "PK", "KeyType": "HASH"},
+                    {"AttributeName": "SK", "KeyType": "RANGE"},
+                ],
+                AttributeDefinitions=[
+                    {"AttributeName": "PK", "AttributeType": "S"},
+                    {"AttributeName": "SK", "AttributeType": "S"},
+                ],
+                BillingMode="PAY_PER_REQUEST",
+            )
+            table.wait_until_exists()
+
+    return table
 
 
 def build_s3_client(config: AppConfig) -> S3Client:

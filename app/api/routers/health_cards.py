@@ -1,8 +1,11 @@
 # app/api/routers/health_cards.py
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from dependency_injector.wiring import Provide, inject
 from fastapi import APIRouter, Depends
+from pydantic import BaseModel as PydanticBaseModel
 
 from app.api.schemas.health_card_schemas import (
     GenerateHealthCardResponse,
@@ -93,4 +96,23 @@ async def get_health_card_by_qr(
         created_at=result.created_at,
         fraud_risk=result.fraud_risk,
         buyer_match_used=result.buyer_match_used,
+    )
+
+
+class HandoffConfirmResponse(PydanticBaseModel):
+    return_id: str
+    confirmed: bool
+    confirmed_at: datetime
+
+
+@router.post(
+    "/{return_id}/confirm-handoff",
+    response_model=HandoffConfirmResponse,
+    status_code=200,
+)
+async def confirm_handoff(return_id: str) -> HandoffConfirmResponse:
+    return HandoffConfirmResponse(
+        return_id=return_id,
+        confirmed=True,
+        confirmed_at=datetime.now(UTC),
     )

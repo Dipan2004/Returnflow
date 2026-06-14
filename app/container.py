@@ -4,11 +4,13 @@ from __future__ import annotations
 from dependency_injector import containers, providers
 
 from app.application.services.grading_workflow_service import GradingWorkflowService
+from app.application.use_cases.accept_buyer_match_use_case import AcceptBuyerMatchUseCase
 from app.application.use_cases.assess_fraud_use_case import AssessFraudUseCase
 from app.application.use_cases.calculate_disposition_use_case import (
     CalculateDispositionUseCase,
 )
 from app.application.use_cases.complete_image_upload_use_case import CompleteImageUploadUseCase
+from app.application.use_cases.create_outcome_use_case import CreateOutcomeUseCase
 from app.application.use_cases.create_return_use_case import CreateReturnUseCase
 from app.application.use_cases.generate_health_card_use_case import GenerateHealthCardUseCase
 from app.application.use_cases.get_buyer_match_use_case import GetBuyerMatchUseCase
@@ -17,15 +19,21 @@ from app.application.use_cases.get_disposition_use_case import GetDispositionUse
 from app.application.use_cases.get_fraud_assessment_use_case import GetFraudAssessmentUseCase
 from app.application.use_cases.get_health_card_by_qr_use_case import GetHealthCardByQRUseCase
 from app.application.use_cases.get_health_card_use_case import GetHealthCardUseCase
+from app.application.use_cases.get_outcome_use_case import GetOutcomeUseCase
 from app.application.use_cases.get_return_status_use_case import GetReturnStatusUseCase
 from app.application.use_cases.get_return_use_case import GetReturnUseCase
 from app.application.use_cases.get_review_status_use_case import GetReviewStatusUseCase
+from app.application.use_cases.get_verification_history_use_case import (
+    GetVerificationHistoryUseCase,
+)
 from app.application.use_cases.get_workflow_state_use_case import GetWorkflowStateUseCase
 from app.application.use_cases.match_buyer_use_case import MatchBuyerUseCase
 from app.application.use_cases.orchestrate_disposition_use_case import (
     OrchestrateDispositionUseCase,
 )
 from app.application.use_cases.process_grading_use_case import ProcessGradingUseCase
+from app.application.use_cases.reject_buyer_match_use_case import RejectBuyerMatchUseCase
+from app.application.use_cases.verify_qr_token_use_case import VerifyQrTokenUseCase
 from app.config import AppConfig, get_config
 from app.domain.services.buyer_matching_engine import BuyerMatchingEngine
 from app.domain.services.disposition_engine import DispositionEngine
@@ -48,6 +56,9 @@ from app.infrastructure.adapters.fraud.dynamodb_fraud_history_adapter import (
     DynamoDBFraudHistoryAdapter,
 )
 from app.infrastructure.adapters.grading.rekognition_adapter import RekognitionGradingAdapter
+from app.infrastructure.adapters.notifications.local_notification_adapter import (
+    LocalNotificationAdapter,
+)
 from app.infrastructure.adapters.qr_storage.local_qr_storage import LocalQRCodeStorage
 from app.infrastructure.adapters.sqs.sqs_human_review_adapter import SQSHumanReviewAdapter
 from app.infrastructure.aws.clients import (
@@ -70,7 +81,13 @@ from app.infrastructure.persistence.dynamodb_fraud_repository import DynamoDBFra
 from app.infrastructure.persistence.dynamodb_health_card_repository import (
     DynamoDBHealthCardRepository,
 )
+from app.infrastructure.persistence.dynamodb_outcome_repository import (
+    DynamoDBOutcomeRepository,
+)
 from app.infrastructure.persistence.dynamodb_return_repository import DynamoDBReturnRepository
+from app.infrastructure.persistence.dynamodb_verification_audit_repository import (
+    DynamoDBVerificationAuditRepository,
+)
 from app.infrastructure.persistence.dynamodb_workflow_state_repository import (
     DynamoDBWorkflowStateRepository,
 )
@@ -278,4 +295,41 @@ class Container(containers.DeclarativeContainer):
     get_health_card_by_qr_use_case = providers.Factory(
         GetHealthCardByQRUseCase,
         health_card_repository=health_card_repository,
+    )
+
+    verification_audit_repository = providers.Singleton(
+        DynamoDBVerificationAuditRepository, table=dynamodb_table
+    )
+
+    verify_qr_token_use_case = providers.Factory(
+        VerifyQrTokenUseCase,
+        health_card_repository=health_card_repository,
+        verification_audit_repository=verification_audit_repository,
+    )
+
+    get_verification_history_use_case = providers.Factory(
+        GetVerificationHistoryUseCase,
+        verification_audit_repository=verification_audit_repository,
+    )
+
+    outcome_repository = providers.Singleton(DynamoDBOutcomeRepository, table=dynamodb_table)
+    notification_port = providers.Singleton(LocalNotificationAdapter)
+
+    create_outcome_use_case = providers.Factory(
+        CreateOutcomeUseCase,
+        outcome_repository=outcome_repository,
+    )
+    accept_buyer_match_use_case = providers.Factory(
+        AcceptBuyerMatchUseCase,
+        outcome_repository=outcome_repository,
+        health_card_repository=health_card_repository,
+    )
+    reject_buyer_match_use_case = providers.Factory(
+        RejectBuyerMatchUseCase,
+        outcome_repository=outcome_repository,
+        health_card_repository=health_card_repository,
+    )
+    get_outcome_use_case = providers.Factory(
+        GetOutcomeUseCase,
+        outcome_repository=outcome_repository,
     )

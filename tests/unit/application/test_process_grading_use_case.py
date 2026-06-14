@@ -86,12 +86,17 @@ async def test_process_grading_persists_damage_labels() -> None:
 
 
 @pytest.mark.asyncio
-async def test_process_grading_calls_describe_damage() -> None:
+async def test_process_grading_uses_grading_port_description() -> None:
     return_request = make_return_request()
-    port = FakeGradingPort(grade=Grade.A, confidence=91.0)
+    port = FakeGradingPort(
+        grade=Grade.A,
+        confidence=91.0,
+        description="Minor scuffing on the front panel.",
+    )
     use_case, _, repo = _make_use_case(port)
     await repo.save(return_request)
 
-    await use_case.execute(return_request.return_id.value)
+    result = await use_case.execute(return_request.return_id.value)
 
-    assert len(port.describe_calls) == 1
+    assert port.grade_calls == [("test-bucket", [key.value for key in return_request.image_keys])]
+    assert result.damage_description == "Minor scuffing on the front panel."

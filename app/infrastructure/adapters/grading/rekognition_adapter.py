@@ -6,10 +6,12 @@ from typing import TYPE_CHECKING, Any
 
 from botocore.exceptions import ClientError
 
-from app.application.ports.grading_port import DamageDescriptionResult, GradingPort, GradingResult
-from app.domain.entities.condition_grade import DamageLabel
+from app.application.ports.description_generation_port import (
+    DescriptionGenerationPort,
+    DescriptionRequest,
+)
+from app.application.ports.grading_port import GradingPort, GradingResult
 from app.domain.exceptions import InfrastructureError
-from app.domain.value_objects.grade import Grade
 from app.infrastructure.adapters.grading.grade_mapper import extract_damage_labels, map_grade
 from app.infrastructure.adapters.grading.models import AggregatedLabelSet, RawLabel
 
@@ -21,10 +23,12 @@ class RekognitionGradingAdapter(GradingPort):
     def __init__(
         self,
         rekognition_client: RekognitionClient,
+        description_port: DescriptionGenerationPort,
         max_labels: int,
         min_confidence: float,
     ) -> None:
         self._client = rekognition_client
+        self._description_port = description_port
         self._max_labels = max_labels
         self._min_confidence = min_confidence
 
@@ -41,39 +45,17 @@ class RekognitionGradingAdapter(GradingPort):
         damage_labels = extract_damage_labels(
             aggregated.filter_by_min_confidence(self._min_confidence)
         )
+        description_response = await self._description_port.generate(
+            DescriptionRequest(grade=grade, damage_labels=damage_labels)
+        )
         return GradingResult(
             grade=grade,
             confidence=confidence,
             damage_labels=damage_labels,
+            damage_description=description_response.description,
+            description_used_fallback=description_response.used_fallback,
             raw_label_count=len(aggregated.labels),
         )
-
-    async def describe_damage(
-        self,
-        grade: Grade,
-        damage_labels: list[DamageLabel],
-    ) -> DamageDescriptionResult:
-        if not damage_labels:
-            return DamageDescriptionResult(
-                description="No visible damage detected. Product appears in excellent condition.",
-                model_id="rule-based",
-            )
-        label_summary = "; ".join(
-            f"{dl.name} ({dl.confidence:.0f}%)" for dl in damage_labels
-        )
-        description = self._build_description(grade, label_summary)
-        return DamageDescriptionResult(description=description, model_id="rule-based")
-
-    def _build_description(self, grade: Grade, label_summary: str) -> str:
-        prefix_map: dict[Grade, str] = {
-            Grade.A: "Minor cosmetic issue detected",
-            Grade.B: "Moderate damage detected",
-            Grade.C: "Significant damage detected",
-            Grade.DONATE: "Extensive damage — not suitable for resale",
-            Grade.SCRAP: "Severe damage — end of life condition",
-        }
-        prefix = prefix_map.get(grade, "Damage detected")
-        return f"{prefix}: {label_summary}."
 
     async def _detect_labels(self, bucket: str, key: str) -> list[RawLabel]:
         try:
@@ -85,7 +67,6 @@ class RekognitionGradingAdapter(GradingPort):
             )
         except ClientError as exc:
             raise InfrastructureError("Rekognition", str(exc)) from exc
-
         return [
             RawLabel(
                 name=label["Name"],

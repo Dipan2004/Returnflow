@@ -84,3 +84,35 @@ class ConditionGradeResult:
     damage_description: str
     routed_to_human_review: bool
     graded_at: datetime
+
+
+@dataclass(frozen=True)
+class StepRecordDTO:
+    step: str
+    status: str
+    started_at: datetime
+    completed_at: datetime | None = None
+    duration_ms: int | None = None
+    error_message: str | None = None
+
+
+@dataclass(frozen=True)
+class WorkflowStateResult:
+    return_id: str
+    status: str
+    current_step: str | None
+    steps: list[StepRecordDTO]
+    started_at: datetime | None
+    completed_at: datetime | None
+    total_duration_ms: int | None
+    error_message: str | None = None
+
+
+@dataclass(frozen=True)
+class ReviewStatusResult:
+    return_id: str
+    routed_to_human_review: bool
+    confidence: float
+    grade: str
+    workflow_status: str
+    graded_at: datetime

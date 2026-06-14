@@ -33,3 +33,32 @@ class ConditionGradeResponse(BaseModel):
     damage_description: str
     routed_to_human_review: bool
     graded_at: datetime
+
+
+class StepRecordResponse(BaseModel):
+    step: str
+    status: str
+    started_at: datetime
+    completed_at: datetime | None = None
+    duration_ms: int | None = None
+    error_message: str | None = None
+
+
+class WorkflowStateResponse(BaseModel):
+    return_id: str
+    status: str
+    current_step: str | None
+    steps: list[StepRecordResponse]
+    started_at: datetime | None
+    completed_at: datetime | None
+    total_duration_ms: int | None
+    error_message: str | None = None
+
+
+class ReviewStatusResponse(BaseModel):
+    return_id: str
+    routed_to_human_review: bool
+    confidence: float
+    grade: str
+    workflow_status: str
+    graded_at: datetime

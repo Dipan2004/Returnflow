@@ -32,6 +32,7 @@ class AppConfig(BaseSettings):
 
     sqs_human_review_queue_url: str = Field(default="")
     sqs_error_queue_url: str = Field(default="")
+    sqs_endpoint_url: str | None = Field(default=None)
 
     sns_buyer_notifications_topic_arn: str = Field(default="")
 

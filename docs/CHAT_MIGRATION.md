@@ -60,3 +60,61 @@ infrastructure adapters existed, and `docs/PROJECT_STATE.md` /
 
 **Handoff:** Use `docs/PROJECT_RECOVERY_PROMPT.md` to start the next
 session (Phase 3 - Grading & Routing).
+
+---
+
+## Session: Phase 3A - Condition Grading Core
+
+**Starting state:** Phase 2 complete (return intake APIs, 18 tests passing).
+
+**Work done:** Implemented Rekognition CV grading adapter, grade mapper
+with weighted damage scoring, ConditionGrade persistence, ConfidenceGate
+domain service, ProcessGradingUseCase, GetConditionGradeUseCase, and
+`/grades` API endpoints.
+
+---
+
+## Session: Phase 3Ba - Bedrock Damage Description
+
+**Starting state:** Phase 3A complete (grading core functional).
+
+**Work done:** Implemented DescriptionGenerationPort, BedrockDescriptionAdapter
+with Claude Haiku integration, prompt_templates, response_parser with
+25-word validation, retry strategy with fallback descriptions. Integrated
+into RekognitionGradingAdapter. Updated container wiring.
+
+---
+
+## Session: Phase 3Bb - Human Review Queue + Grading Workflow
+
+**Starting state:** Phase 3Ba complete, 51 tests passing.
+
+**Work done this session:**
+
+1. Created `HumanReviewRequest` domain entity with priority classification
+   (CRITICAL/HIGH/MEDIUM/LOW based on confidence distance from threshold).
+2. Created `WorkflowState` domain entity for step-by-step execution
+   tracking with timing metadata.
+3. Created `HumanReviewQueuePort` application port.
+4. Created `WorkflowStateRepository` application port.
+5. Implemented `SQSHumanReviewAdapter` with retry logic (configurable
+   retries with linear backoff, message attributes for filtering).
+6. Implemented `GradingWorkflowService` — orchestrates full pipeline:
+   GradeImages → CheckConfidence → GenerateDamageDescription/SendToHumanReview.
+   Records step start/complete/fail. Persists workflow state.
+7. Implemented `DynamoDBWorkflowStateRepository` + `workflow_state_mapper`.
+8. Created `GetWorkflowStateUseCase` and `GetReviewStatusUseCase`.
+9. Added API endpoints: `POST /grades/process`, `GET /grades/{id}/workflow`,
+   `GET /grades/{id}/review-status`.
+10. Added `build_sqs_client` to `clients.py`, `sqs_endpoint_url` to config.
+11. Updated container with all new registrations.
+12. Updated `pyproject.toml` with `boto3-stubs[sqs]`, `moto[sqs]`.
+13. Created full test suite: 44 new tests (domain, application, infrastructure,
+    integration). **95 total tests passing.**
+14. Updated all documentation: PROJECT_STATE, REPOSITORY_MAP,
+    PROJECT_RECOVERY_PROMPT, phase doc.
+
+**Final verification:** `pytest tests/` → `95 passed`.
+
+**Handoff:** Phase 3 complete. Next is Phase 4 (Disposition Routing +
+Fraud Detection). Use `docs/PROJECT_RECOVERY_PROMPT.md` to resume.

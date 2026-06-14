@@ -1,7 +1,8 @@
+# app/application/ports/grading_port.py
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from app.domain.entities.condition_grade import DamageLabel
 from app.domain.value_objects.grade import Grade
@@ -12,13 +13,9 @@ class GradingResult:
     grade: Grade
     confidence: float
     damage_labels: list[DamageLabel]
+    damage_description: str
     raw_label_count: int
-
-
-@dataclass(frozen=True)
-class DamageDescriptionResult:
-    description: str
-    model_id: str
+    description_used_fallback: bool = field(default=False)
 
 
 class GradingPort(ABC):
@@ -28,10 +25,3 @@ class GradingPort(ABC):
         bucket: str,
         image_keys: list[str],
     ) -> GradingResult: ...
-
-    @abstractmethod
-    async def describe_damage(
-        self,
-        grade: Grade,
-        damage_labels: list[DamageLabel],
-    ) -> DamageDescriptionResult: ...

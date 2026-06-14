@@ -49,11 +49,6 @@ class ProcessGradingUseCase:
             image_keys=image_keys_str,
         )
 
-        description_result = await self._grading_port.describe_damage(
-            grade=grading_result.grade,
-            damage_labels=grading_result.damage_labels,
-        )
-
         image_keys = [ImageKey(k) for k in image_keys_str]
 
         condition_grade = ConditionGrade.create(
@@ -61,7 +56,7 @@ class ProcessGradingUseCase:
             grade=grading_result.grade,
             confidence=grading_result.confidence,
             damage_labels=grading_result.damage_labels,
-            damage_description=description_result.description,
+            damage_description=grading_result.damage_description,
             image_keys=image_keys,
         )
 

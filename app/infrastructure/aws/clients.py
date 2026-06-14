@@ -10,6 +10,7 @@ if TYPE_CHECKING:
     from mypy_boto3_dynamodb.service_resource import Table
     from mypy_boto3_rekognition import RekognitionClient
     from mypy_boto3_s3 import S3Client
+    from mypy_boto3_sagemaker_runtime import SageMakerRuntimeClient
     from mypy_boto3_sqs import SQSClient
 
     from app.config import AppConfig
@@ -43,3 +44,7 @@ def build_sqs_client(config: AppConfig) -> SQSClient:
     if config.sqs_endpoint_url:
         kwargs["endpoint_url"] = config.sqs_endpoint_url
     return boto3.client("sqs", **kwargs)
+
+
+def build_sagemaker_runtime_client(config: AppConfig) -> SageMakerRuntimeClient:
+    return boto3.client("sagemaker-runtime", region_name=config.aws_region)

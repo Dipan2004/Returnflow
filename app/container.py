@@ -15,6 +15,7 @@ from app.application.use_cases.create_return_use_case import CreateReturnUseCase
 from app.application.use_cases.generate_health_card_use_case import GenerateHealthCardUseCase
 from app.application.use_cases.get_buyer_match_use_case import GetBuyerMatchUseCase
 from app.application.use_cases.get_condition_grade_use_case import GetConditionGradeUseCase
+from app.application.use_cases.get_dashboard_metrics_use_case import GetDashboardMetricsUseCase
 from app.application.use_cases.get_disposition_use_case import GetDispositionUseCase
 from app.application.use_cases.get_fraud_assessment_use_case import GetFraudAssessmentUseCase
 from app.application.use_cases.get_health_card_by_qr_use_case import GetHealthCardByQRUseCase
@@ -23,6 +24,9 @@ from app.application.use_cases.get_outcome_use_case import GetOutcomeUseCase
 from app.application.use_cases.get_return_status_use_case import GetReturnStatusUseCase
 from app.application.use_cases.get_return_use_case import GetReturnUseCase
 from app.application.use_cases.get_review_status_use_case import GetReviewStatusUseCase
+from app.application.use_cases.get_size_recommendation_use_case import (
+    GetSizeRecommendationUseCase,
+)
 from app.application.use_cases.get_verification_history_use_case import (
     GetVerificationHistoryUseCase,
 )
@@ -31,15 +35,18 @@ from app.application.use_cases.match_buyer_use_case import MatchBuyerUseCase
 from app.application.use_cases.orchestrate_disposition_use_case import (
     OrchestrateDispositionUseCase,
 )
+from app.application.use_cases.predict_return_use_case import PredictReturnUseCase
 from app.application.use_cases.process_grading_use_case import ProcessGradingUseCase
 from app.application.use_cases.reject_buyer_match_use_case import RejectBuyerMatchUseCase
 from app.application.use_cases.verify_qr_token_use_case import VerifyQrTokenUseCase
 from app.config import AppConfig, get_config
 from app.domain.services.buyer_matching_engine import BuyerMatchingEngine
+from app.domain.services.dashboard_aggregation_engine import DashboardAggregationEngine
 from app.domain.services.disposition_engine import DispositionEngine
 from app.domain.services.disposition_orchestrator import DispositionOrchestrator
 from app.domain.services.fraud_engine import FraudEngine
 from app.domain.services.human_review_decision import ConfidenceGate
+from app.domain.services.prevent_iq_engine import PreventIQEngine
 from app.domain.services.qr_generation_service import QRCodeGenerationService
 from app.infrastructure.adapters.bedrock.bedrock_description_adapter import (
     BedrockDescriptionAdapter,
@@ -52,6 +59,8 @@ from app.infrastructure.adapters.catalog.in_memory_product_catalog import (
     InMemoryProductCatalog,
 )
 from app.infrastructure.adapters.demand.in_memory_demand_signal import InMemoryDemandSignal
+from app.infrastructure.adapters.features.in_memory_buyer_features import InMemoryBuyerFeatures
+from app.infrastructure.adapters.features.in_memory_sku_features import InMemorySkuFeatures
 from app.infrastructure.adapters.fraud.dynamodb_fraud_history_adapter import (
     DynamoDBFraudHistoryAdapter,
 )
@@ -59,6 +68,7 @@ from app.infrastructure.adapters.grading.rekognition_adapter import RekognitionG
 from app.infrastructure.adapters.notifications.local_notification_adapter import (
     LocalNotificationAdapter,
 )
+from app.infrastructure.adapters.prediction.demo_prediction_model import DemoPredictionModel
 from app.infrastructure.adapters.qr_storage.local_qr_storage import LocalQRCodeStorage
 from app.infrastructure.adapters.sqs.sqs_human_review_adapter import SQSHumanReviewAdapter
 from app.infrastructure.aws.clients import (
@@ -73,6 +83,9 @@ from app.infrastructure.persistence.dynamodb_buyer_match_repository import (
 )
 from app.infrastructure.persistence.dynamodb_condition_grade_repository import (
     DynamoDBConditionGradeRepository,
+)
+from app.infrastructure.persistence.dynamodb_dashboard_repository import (
+    DynamoDBDashboardRepository,
 )
 from app.infrastructure.persistence.dynamodb_disposition_repository import (
     DynamoDBDispositionRepository,
@@ -332,4 +345,31 @@ class Container(containers.DeclarativeContainer):
     get_outcome_use_case = providers.Factory(
         GetOutcomeUseCase,
         outcome_repository=outcome_repository,
+    )
+
+    buyer_feature_port = providers.Singleton(InMemoryBuyerFeatures)
+    sku_feature_port = providers.Singleton(InMemorySkuFeatures)
+    prediction_model = providers.Singleton(DemoPredictionModel)
+    prevent_iq_engine = providers.Singleton(PreventIQEngine)
+
+    predict_return_use_case = providers.Factory(
+        PredictReturnUseCase,
+        buyer_feature_port=buyer_feature_port,
+        sku_feature_port=sku_feature_port,
+        prediction_model=prediction_model,
+        prevent_iq_engine=prevent_iq_engine,
+    )
+    get_size_recommendation_use_case = providers.Factory(
+        GetSizeRecommendationUseCase,
+        sku_feature_port=sku_feature_port,
+        prevent_iq_engine=prevent_iq_engine,
+    )
+
+    dashboard_repository = providers.Singleton(DynamoDBDashboardRepository, table=dynamodb_table)
+    dashboard_aggregation_engine = providers.Singleton(DashboardAggregationEngine)
+
+    get_dashboard_metrics_use_case = providers.Factory(
+        GetDashboardMetricsUseCase,
+        dashboard_repository=dashboard_repository,
+        aggregation_engine=dashboard_aggregation_engine,
     )

@@ -10,12 +10,14 @@ from fastapi.responses import JSONResponse
 
 from app.api.routers import (
     buyer_match,
+    dashboard,
     dispositions,
     fraud,
     grades,
     health,
     health_cards,
     outcomes,
+    predict,
     returns,
     verify,
 )
@@ -83,6 +85,8 @@ def create_app() -> FastAPI:
     application.include_router(buyer_match.router)
     application.include_router(verify.router)
     application.include_router(outcomes.router)
+    application.include_router(predict.router)
+    application.include_router(dashboard.router)
 
     @application.exception_handler(EntityNotFoundError)
     async def entity_not_found_handler(request: Request, exc: EntityNotFoundError) -> JSONResponse:

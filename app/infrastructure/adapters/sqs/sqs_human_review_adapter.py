@@ -73,12 +73,13 @@ class SQSHumanReviewAdapter(HumanReviewQueuePort):
         self,
         message_body: str,
         message_attributes: dict[str, Any],
-    ) -> dict[str, Any]:
-        response: dict[str, Any] = await asyncio.to_thread(
-            self._client.send_message,
-            QueueUrl=self._queue_url,
-            MessageBody=message_body,
-            MessageAttributes=message_attributes,
+    ) -> Any:
+        response = await asyncio.to_thread(
+            lambda: self._client.send_message(
+                QueueUrl=self._queue_url,
+                MessageBody=message_body,
+                MessageAttributes=message_attributes,
+            )
         )
         return response
 

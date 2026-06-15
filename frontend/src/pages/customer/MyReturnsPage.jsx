@@ -3,17 +3,37 @@ import Header from "../../components/layout/Header";
 import Navbar from "../../components/layout/Navbar";
 import Sidebar from "../../components/layout/Sidebar";
 
+const BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+const API_KEY = import.meta.env.VITE_API_KEY || "returniq-dev-key-2026";
+
+async function apiFetch(url, options = {}) {
+  const res = await fetch(url, {
+    ...options,
+    headers: { "Content-Type": "application/json", "X-API-Key": API_KEY, ...options.headers },
+  });
+  if (!res.ok) throw new Error(`${res.status}`);
+  return res.json();
+}
+
 const STATUS_BADGES = {
   PENDING_PICKUP: { text: "Pickup Scheduled", color: "#856404", bg: "#fff3cd" },
+  PICKED_UP: { text: "Picked Up by Agent", color: "#004085", bg: "#cce5ff" },
+  AVAILABLE_FOR_RESALE: { text: "Refund Processed", color: "#155724", bg: "#d4edda" },
+  SOLD: { text: "Refund Processed", color: "#155724", bg: "#d4edda" },
+  REJECTED: { text: "Return Rejected", color: "#721c24", bg: "#f8d7da" },
   GRADED: { text: "Graded", color: "#004085", bg: "#cce5ff" },
   P2P_MATCHED: { text: "Matched/Reselling", color: "#27726b", bg: "#f0faf8" },
   DELIVERED: { text: "Completed", color: "#155724", bg: "#d4edda" },
 };
 
-const STEPPER_STEPS = ["Submitted", "Graded", "Matched", "Delivered"];
+const STEPPER_STEPS = ["Return Initiated", "Pickup Scheduled", "Picked Up", "Refund Processed"];
 
 const STATUS_INDEX = {
-  PENDING_PICKUP: 0,
+  PENDING_PICKUP: 1,
+  PICKED_UP: 2,
+  AVAILABLE_FOR_RESALE: 3,
+  SOLD: 3,
+  REJECTED: 0,
   GRADED: 1,
   P2P_MATCHED: 2,
   DELIVERED: 3,
@@ -27,7 +47,6 @@ export default function MyReturnsPage() {
   useEffect(() => {
     function loadReturns() {
       let current = JSON.parse(localStorage.getItem("returniq_returns") || "[]");
-      // Pre-populate with a demo return if empty
       if (current.length === 0) {
         const demo = {
           return_id: "ret-demo-123",
@@ -49,20 +68,43 @@ export default function MyReturnsPage() {
         localStorage.setItem("returniq_returns", JSON.stringify(current));
       }
       setReturns(current);
-      // Select the first return by default
-      if (current.length > 0) {
+      if (current.length > 0 && !selectedReturn) {
         setSelectedReturn(current[0]);
       }
     }
     loadReturns();
 
-    // Set up storage listener to respond to background updates
+    async function pollStatuses() {
+      const current = JSON.parse(localStorage.getItem("returniq_returns") || "[]");
+      let updated = false;
+      for (const r of current) {
+        if (!r.return_id || r.return_id.startsWith("ret-demo")) continue;
+        try {
+          const res = await apiFetch(`${BASE}/returns/${r.return_id}/flow-status`);
+          if (res.status && res.status !== r.status) {
+            r.status = res.status;
+            if (res.grade) r.grade = res.grade;
+            updated = true;
+          }
+        } catch {}
+      }
+      if (updated) {
+        localStorage.setItem("returniq_returns", JSON.stringify(current));
+        setReturns([...current]);
+        const sel = selectedReturn ? current.find((r) => r.return_id === selectedReturn.return_id) : null;
+        if (sel) setSelectedReturn(sel);
+      }
+    }
+
     window.addEventListener("storage", loadReturns);
-    const interval = setInterval(loadReturns, 2000); // Poll localstorage
+    const localInterval = setInterval(loadReturns, 2000);
+    const apiInterval = setInterval(pollStatuses, 5000);
+    pollStatuses();
 
     return () => {
       window.removeEventListener("storage", loadReturns);
-      clearInterval(interval);
+      clearInterval(localInterval);
+      clearInterval(apiInterval);
     };
   }, []);
 
@@ -233,6 +275,17 @@ export default function MyReturnsPage() {
                   <div style={{ backgroundColor: "#e8f4fd", border: "1px solid #bee5eb", padding: 16, borderRadius: 4, fontSize: 13, color: "#0c5460", lineHeight: 1.5 }}>
                     <strong>Grading Completed:</strong> <br />
                     Your return has been assessed as <strong>Grade {selectedReturn.grade}</strong>. We are matching it with nearby demand. Your refund will process shortly.
+                  </div>
+                )}
+
+                {selectedReturn.status === "AVAILABLE_FOR_RESALE" && (
+                  <div style={{ backgroundColor: "#d4edda", border: "1px solid #c3e6cb", padding: 16, borderRadius: 4, fontSize: 13, color: "#155724", lineHeight: 1.5 }}>
+                    <strong>🎉 Your returned item is now listed for resale</strong>
+                    {selectedReturn.resale_price && (
+                      <span> at <strong>₹{selectedReturn.resale_price}</strong></span>
+                    )}
+                    <br />
+                    A nearby buyer can purchase it at a discount. You'll be notified when it sells.
                   </div>
                 )}
 

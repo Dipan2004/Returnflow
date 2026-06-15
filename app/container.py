@@ -51,6 +51,7 @@ from app.domain.services.qr_generation_service import QRCodeGenerationService
 from app.infrastructure.adapters.bedrock.bedrock_description_adapter import (
     BedrockDescriptionAdapter,
 )
+from app.infrastructure.adapters.bedrock.stub_description_adapter import StubDescriptionAdapter
 from app.infrastructure.adapters.buyer_match.in_memory_buyer_matching_adapter import (
     InMemoryBuyerMatchingAdapter,
 )
@@ -64,6 +65,10 @@ from app.infrastructure.adapters.features.in_memory_sku_features import InMemory
 from app.infrastructure.adapters.fraud.dynamodb_fraud_history_adapter import (
     DynamoDBFraudHistoryAdapter,
 )
+from app.infrastructure.adapters.fraud.in_memory_fraud_history_adapter import (
+    InMemoryFraudHistoryAdapter,
+)
+from app.infrastructure.adapters.grading.demo_grading_adapter import DemoGradingAdapter
 from app.infrastructure.adapters.grading.rekognition_adapter import RekognitionGradingAdapter
 from app.infrastructure.adapters.notifications.local_notification_adapter import (
     LocalNotificationAdapter,
@@ -71,6 +76,8 @@ from app.infrastructure.adapters.notifications.local_notification_adapter import
 from app.infrastructure.adapters.prediction.demo_prediction_model import DemoPredictionModel
 from app.infrastructure.adapters.qr_storage.local_qr_storage import LocalQRCodeStorage
 from app.infrastructure.adapters.sqs.sqs_human_review_adapter import SQSHumanReviewAdapter
+from app.infrastructure.adapters.sqs.stub_human_review_adapter import StubHumanReviewAdapter
+from app.infrastructure.adapters.storage.stub_image_storage import StubImageStorage
 from app.infrastructure.aws.clients import (
     build_bedrock_client,
     build_dynamodb_table,
@@ -104,7 +111,128 @@ from app.infrastructure.persistence.dynamodb_verification_audit_repository impor
 from app.infrastructure.persistence.dynamodb_workflow_state_repository import (
     DynamoDBWorkflowStateRepository,
 )
+from app.infrastructure.persistence.in_memory_buyer_match_repository import (
+    InMemoryBuyerMatchRepository,
+)
+from app.infrastructure.persistence.in_memory_condition_grade_repository import (
+    InMemoryConditionGradeRepository,
+)
+from app.infrastructure.persistence.in_memory_dashboard_repository import (
+    InMemoryDashboardRepository,
+)
+from app.infrastructure.persistence.in_memory_disposition_repository import (
+    InMemoryDispositionRepository,
+)
+from app.infrastructure.persistence.in_memory_fraud_repository import InMemoryFraudRepository
+from app.infrastructure.persistence.in_memory_health_card_repository import (
+    InMemoryHealthCardRepository,
+)
+from app.infrastructure.persistence.in_memory_outcome_repository import (
+    InMemoryOutcomeRepository,
+)
+from app.infrastructure.persistence.in_memory_return_repository import InMemoryReturnRepository
+from app.infrastructure.persistence.in_memory_verification_audit_repository import (
+    InMemoryVerificationAuditRepository,
+)
+from app.infrastructure.persistence.in_memory_workflow_state_repository import (
+    InMemoryWorkflowStateRepository,
+)
 from app.infrastructure.storage.s3_image_storage import S3ImageStorage
+
+
+def _build_return_repository(table):
+    if table is None:
+        return InMemoryReturnRepository()
+    return DynamoDBReturnRepository(table=table)
+
+
+def _build_condition_grade_repository(table):
+    if table is None:
+        return InMemoryConditionGradeRepository()
+    return DynamoDBConditionGradeRepository(table=table)
+
+
+def _build_workflow_state_repository(table):
+    if table is None:
+        return InMemoryWorkflowStateRepository()
+    return DynamoDBWorkflowStateRepository(table=table)
+
+
+def _build_disposition_repository(table):
+    if table is None:
+        return InMemoryDispositionRepository()
+    return DynamoDBDispositionRepository(table=table)
+
+
+def _build_fraud_repository(table):
+    if table is None:
+        return InMemoryFraudRepository()
+    return DynamoDBFraudRepository(table=table)
+
+
+def _build_buyer_match_repository(table):
+    if table is None:
+        return InMemoryBuyerMatchRepository()
+    return DynamoDBBuyerMatchRepository(table=table)
+
+
+def _build_health_card_repository(table):
+    if table is None:
+        return InMemoryHealthCardRepository()
+    return DynamoDBHealthCardRepository(table=table)
+
+
+def _build_verification_audit_repository(table):
+    if table is None:
+        return InMemoryVerificationAuditRepository()
+    return DynamoDBVerificationAuditRepository(table=table)
+
+
+def _build_outcome_repository(table):
+    if table is None:
+        return InMemoryOutcomeRepository()
+    return DynamoDBOutcomeRepository(table=table)
+
+
+def _build_dashboard_repository(table):
+    if table is None:
+        return InMemoryDashboardRepository()
+    return DynamoDBDashboardRepository(table=table)
+
+
+def _build_fraud_history_port(table):
+    if table is None:
+        return InMemoryFraudHistoryAdapter()
+    return DynamoDBFraudHistoryAdapter(table=table)
+
+
+def _build_image_storage(s3_client, bucket, upload_expiry_seconds):
+    if s3_client is None:
+        return StubImageStorage()
+    return S3ImageStorage(client=s3_client, bucket=bucket, upload_expiry_seconds=upload_expiry_seconds)
+
+
+def _build_description_adapter(bedrock_client, model_id):
+    if bedrock_client is None:
+        return StubDescriptionAdapter()
+    return BedrockDescriptionAdapter(bedrock_client=bedrock_client, model_id=model_id)
+
+
+def _build_grading_adapter(rekognition_client, description_port, max_labels, min_confidence):
+    if rekognition_client is None:
+        return DemoGradingAdapter()
+    return RekognitionGradingAdapter(
+        rekognition_client=rekognition_client,
+        description_port=description_port,
+        max_labels=max_labels,
+        min_confidence=min_confidence,
+    )
+
+
+def _build_human_review_queue(sqs_client, queue_url):
+    if sqs_client is None:
+        return StubHumanReviewAdapter()
+    return SQSHumanReviewAdapter(sqs_client=sqs_client, queue_url=queue_url)
 
 
 class Container(containers.DeclarativeContainer):
@@ -118,32 +246,33 @@ class Container(containers.DeclarativeContainer):
     bedrock_client = providers.Singleton(build_bedrock_client, config=config)
     sqs_client = providers.Singleton(build_sqs_client, config=config)
 
-    return_repository = providers.Singleton(DynamoDBReturnRepository, table=dynamodb_table)
+    return_repository = providers.Singleton(_build_return_repository, table=dynamodb_table)
     condition_grade_repository = providers.Singleton(
-        DynamoDBConditionGradeRepository, table=dynamodb_table
+        _build_condition_grade_repository, table=dynamodb_table
     )
     workflow_state_repository = providers.Singleton(
-        DynamoDBWorkflowStateRepository, table=dynamodb_table
+        _build_workflow_state_repository, table=dynamodb_table
     )
     disposition_repository = providers.Singleton(
-        DynamoDBDispositionRepository, table=dynamodb_table
+        _build_disposition_repository, table=dynamodb_table
     )
-    fraud_repository = providers.Singleton(DynamoDBFraudRepository, table=dynamodb_table)
+    fraud_repository = providers.Singleton(_build_fraud_repository, table=dynamodb_table)
+
     image_storage = providers.Singleton(
-        S3ImageStorage,
-        client=s3_client,
+        _build_image_storage,
+        s3_client=s3_client,
         bucket=config.provided.s3_image_bucket,
         upload_expiry_seconds=config.provided.s3_presign_expiry_seconds,
     )
 
     description_adapter = providers.Singleton(
-        BedrockDescriptionAdapter,
+        _build_description_adapter,
         bedrock_client=bedrock_client,
         model_id=config.provided.bedrock_model_id,
     )
 
     grading_adapter = providers.Singleton(
-        RekognitionGradingAdapter,
+        _build_grading_adapter,
         rekognition_client=rekognition_client,
         description_port=description_adapter,
         max_labels=config.provided.rekognition_max_labels,
@@ -151,14 +280,14 @@ class Container(containers.DeclarativeContainer):
     )
 
     human_review_queue = providers.Singleton(
-        SQSHumanReviewAdapter,
+        _build_human_review_queue,
         sqs_client=sqs_client,
         queue_url=config.provided.sqs_human_review_queue_url,
     )
 
     demand_signal_port = providers.Singleton(InMemoryDemandSignal)
     product_catalog_port = providers.Singleton(InMemoryProductCatalog)
-    fraud_history_port = providers.Singleton(DynamoDBFraudHistoryAdapter, table=dynamodb_table)
+    fraud_history_port = providers.Singleton(_build_fraud_history_port, table=dynamodb_table)
 
     confidence_gate = providers.Singleton(
         ConfidenceGate, threshold=config.provided.grading_confidence_threshold
@@ -249,7 +378,9 @@ class Container(containers.DeclarativeContainer):
 
     demand_index_port = providers.Singleton(InMemoryDemandIndex)
     buyer_matching_port = providers.Singleton(InMemoryBuyerMatchingAdapter)
-    buyer_match_repository = providers.Singleton(DynamoDBBuyerMatchRepository, table=dynamodb_table)
+    buyer_match_repository = providers.Singleton(
+        _build_buyer_match_repository, table=dynamodb_table
+    )
     buyer_matching_engine = providers.Singleton(BuyerMatchingEngine)
 
     match_buyer_use_case = providers.Factory(
@@ -280,7 +411,9 @@ class Container(containers.DeclarativeContainer):
         orchestrator=disposition_orchestrator,
     )
 
-    health_card_repository = providers.Singleton(DynamoDBHealthCardRepository, table=dynamodb_table)
+    health_card_repository = providers.Singleton(
+        _build_health_card_repository, table=dynamodb_table
+    )
 
     qr_storage_port = providers.Singleton(LocalQRCodeStorage, base_url=config.provided.base_url)
 
@@ -311,7 +444,7 @@ class Container(containers.DeclarativeContainer):
     )
 
     verification_audit_repository = providers.Singleton(
-        DynamoDBVerificationAuditRepository, table=dynamodb_table
+        _build_verification_audit_repository, table=dynamodb_table
     )
 
     verify_qr_token_use_case = providers.Factory(
@@ -325,7 +458,7 @@ class Container(containers.DeclarativeContainer):
         verification_audit_repository=verification_audit_repository,
     )
 
-    outcome_repository = providers.Singleton(DynamoDBOutcomeRepository, table=dynamodb_table)
+    outcome_repository = providers.Singleton(_build_outcome_repository, table=dynamodb_table)
     notification_port = providers.Singleton(LocalNotificationAdapter)
 
     create_outcome_use_case = providers.Factory(
@@ -365,7 +498,7 @@ class Container(containers.DeclarativeContainer):
         prevent_iq_engine=prevent_iq_engine,
     )
 
-    dashboard_repository = providers.Singleton(DynamoDBDashboardRepository, table=dynamodb_table)
+    dashboard_repository = providers.Singleton(_build_dashboard_repository, table=dynamodb_table)
     dashboard_aggregation_engine = providers.Singleton(DashboardAggregationEngine)
 
     get_dashboard_metrics_use_case = providers.Factory(

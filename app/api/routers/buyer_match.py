@@ -4,7 +4,7 @@ from __future__ import annotations
 from dependency_injector.wiring import Provide, inject
 from fastapi import APIRouter, Depends
 
-from app.api.schemas.buyer_match_schemas import BuyerMatchResponse, ComputeBuyerMatchRequest
+from app.api.schemas.buyer_match_schemas import BuyerMatchResponse, ComputeBuyerMatchRequest, MatchedBuyer
 from app.application.use_cases.buyer_match_dto import BuyerMatchRequest
 from app.application.use_cases.get_buyer_match_use_case import GetBuyerMatchUseCase
 from app.application.use_cases.match_buyer_use_case import MatchBuyerUseCase
@@ -27,6 +27,12 @@ async def compute_buyer_match(
             grade=body.grade,
         )
     )
+    demo_buyers = []
+    if result.estimated_buyers > 0:
+        demo_buyers = [
+            MatchedBuyer(buyer_id="buyer_nearby_1", distance_km=1.2, pincode=body.pincode),
+            MatchedBuyer(buyer_id="buyer_nearby_2", distance_km=3.4, pincode="751001"),
+        ][:result.estimated_buyers]
     return BuyerMatchResponse(
         return_id=result.return_id,
         sku_id=result.sku_id,
@@ -40,6 +46,8 @@ async def compute_buyer_match(
         confidence=result.confidence,
         p2p_recommended=result.p2p_recommended,
         computed_at=result.computed_at,
+        match_count=len(demo_buyers),
+        matched_buyers=demo_buyers,
     )
 
 

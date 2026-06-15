@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dependency_injector.wiring import Provide, inject
 from fastapi import APIRouter, Depends, status
+from pydantic import BaseModel, Field
 
 from app.api.schemas.return_schemas import (
     CreateReturnRequest,
@@ -35,6 +36,20 @@ async def create_return(
         buyer_id=payload.buyer_id,
         image_count=payload.image_count,
     )
+
+    from app.infrastructure.persistence.in_memory_store import STORE
+    STORE.setdefault("returns", {})[result.return_id] = {
+        "sku_id": payload.sku_id,
+        "seller_id": payload.seller_id,
+        "buyer_id": payload.buyer_id,
+        "status": "PENDING_PICKUP",
+        "grade": "",
+        "reason": payload.reason,
+        "original_price": 999.0,
+        "address": "Patia, Bhubaneswar, 751024",
+        "pickup_window": "Today, 10 AM – 2 PM",
+    }
+
     return CreateReturnResponse(
         return_id=result.return_id,
         status=result.status,
@@ -103,4 +118,57 @@ async def complete_image_upload(
         image_count=result.image_count,
         expected_image_count=result.expected_image_count,
         all_images_received=result.all_images_received,
+    )
+
+
+class UpdateStatusRequest(BaseModel):
+    status: str = Field(min_length=1, max_length=50)
+
+
+class UpdateStatusResponse(BaseModel):
+    return_id: str
+    status: str
+
+
+@router.patch("/{return_id}/status", response_model=UpdateStatusResponse)
+async def update_return_status(
+    return_id: str,
+    payload: UpdateStatusRequest,
+) -> UpdateStatusResponse:
+    from app.infrastructure.persistence.in_memory_store import STORE
+    returns = STORE.setdefault("returns", {})
+    if return_id in returns and isinstance(returns[return_id], dict):
+        returns[return_id]["status"] = payload.status
+    return UpdateStatusResponse(return_id=return_id, status=payload.status)
+
+
+class DemoStatusResponse(BaseModel):
+    return_id: str
+    status: str
+    sku_id: str
+    product_name: str
+    grade: str
+
+
+@router.get("/{return_id}/flow-status", response_model=DemoStatusResponse)
+async def get_return_flow_status(return_id: str) -> DemoStatusResponse:
+    from app.api.routers.delivery import PRODUCTS_MAP
+    from app.infrastructure.persistence.in_memory_store import STORE
+    returns = STORE.get("returns", {})
+    data = returns.get(return_id)
+    if isinstance(data, dict):
+        sku = str(data.get("sku_id", ""))
+        return DemoStatusResponse(
+            return_id=return_id,
+            status=data.get("status", "UNKNOWN"),
+            sku_id=sku,
+            product_name=PRODUCTS_MAP.get(sku, sku),
+            grade=data.get("grade", ""),
+        )
+    return DemoStatusResponse(
+        return_id=return_id,
+        status="UNKNOWN",
+        sku_id="",
+        product_name="",
+        grade="",
     )

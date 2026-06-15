@@ -9,6 +9,7 @@ class Grade(StrEnum):
     A = "A"
     B = "B"
     C = "C"
+    D = "D"
     DONATE = "DONATE"
     SCRAP = "SCRAP"
 
@@ -36,6 +37,7 @@ class Grade(StrEnum):
             Grade.A: "Excellent - No visible damage",
             Grade.B: "Good - Minor cosmetic damage",
             Grade.C: "Fair - Significant damage",
+            Grade.D: "Damaged - Return rejected",
             Grade.DONATE: "Donate - Not suitable for resale",
             Grade.SCRAP: "Scrap - End of life",
         }

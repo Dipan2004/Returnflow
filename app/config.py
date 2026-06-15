@@ -17,6 +17,7 @@ class AppConfig(BaseSettings):
     app_env: str = Field(default="local")
     app_version: str = Field(default="0.1.0")
     log_level: str = Field(default="INFO")
+    demo_mode: bool = Field(default=True)
 
     aws_region: str = Field(default="ap-south-1")
     aws_account_id: str = Field(default="123456789012")

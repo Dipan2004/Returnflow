@@ -13,6 +13,7 @@ class CreateReturnRequest(BaseSchema):
     seller_id: str = Field(min_length=1, max_length=100)
     buyer_id: str = Field(min_length=1, max_length=100)
     image_count: int = Field(default=3, ge=1, le=10)
+    reason: str = Field(default="", max_length=500)
 
     @field_validator("sku_id", "seller_id", "buyer_id", mode="before")
     @classmethod

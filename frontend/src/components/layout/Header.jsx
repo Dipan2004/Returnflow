@@ -4,7 +4,7 @@ import { useCart } from "../../contexts/CartContext";
 import { Link, useNavigate } from "react-router-dom";
 
 export default function Header({ onReturnClick }) {
-  const { user, logout } = useAuth();
+  const { user, role, logout } = useAuth();
   const { cart } = useCart();
   const [showDropdown, setShowDropdown] = useState(false);
   const navigate = useNavigate();
@@ -152,6 +152,38 @@ export default function Header({ onReturnClick }) {
               </div>
             )}
           </div>
+
+          {/* Role-based nav link */}
+          {role === "customer" && (
+            <Link
+              to="/buyer-feed"
+              className="border-white"
+              style={{ cursor: "pointer", padding: "4px 8px", textDecoration: "none", color: "white", display: "flex", flexDirection: "column" }}
+            >
+              <p style={{ margin: 0, fontSize: "12px", color: "#ccc" }}>🛍️ Available</p>
+              <p style={{ margin: 0, fontSize: "14px", fontWeight: "bold", color: "white", marginTop: "-2px" }}>Near You</p>
+            </Link>
+          )}
+          {role === "delivery_agent" && (
+            <Link
+              to="/delivery"
+              className="border-white"
+              style={{ cursor: "pointer", padding: "4px 8px", textDecoration: "none", color: "white", display: "flex", flexDirection: "column" }}
+            >
+              <p style={{ margin: 0, fontSize: "12px", color: "#ccc" }}>📦 My</p>
+              <p style={{ margin: 0, fontSize: "14px", fontWeight: "bold", color: "white", marginTop: "-2px" }}>Queue</p>
+            </Link>
+          )}
+          {role === "warehouse" && (
+            <Link
+              to="/warehouse"
+              className="border-white"
+              style={{ cursor: "pointer", padding: "4px 8px", textDecoration: "none", color: "white", display: "flex", flexDirection: "column" }}
+            >
+              <p style={{ margin: 0, fontSize: "12px", color: "#ccc" }}>🏭 Warehouse</p>
+              <p style={{ margin: 0, fontSize: "14px", fontWeight: "bold", color: "white", marginTop: "-2px" }}>Queue</p>
+            </Link>
+          )}
 
           {/* Returns & Orders (Links to /orders) */}
           <Link

@@ -13,6 +13,12 @@ class ComputeBuyerMatchRequest(BaseModel):
     grade: str = Field(..., min_length=1)
 
 
+class MatchedBuyer(BaseModel):
+    buyer_id: str
+    distance_km: float
+    pincode: str
+
+
 class BuyerMatchResponse(BaseModel):
     return_id: str
     sku_id: str
@@ -26,3 +32,5 @@ class BuyerMatchResponse(BaseModel):
     confidence: str
     p2p_recommended: bool
     computed_at: datetime
+    match_count: int = 0
+    matched_buyers: list[MatchedBuyer] = []

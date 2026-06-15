@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api.routers import (
+    buyer_feed,
     buyer_match,
     dashboard,
     delivery,
@@ -21,6 +22,7 @@ from app.api.routers import (
     predict,
     returns,
     verify,
+    warehouse,
 )
 from app.api.security.api_key import verify_api_key
 from app.config import get_config
@@ -100,6 +102,8 @@ def create_app() -> FastAPI:
     application.include_router(predict.router)
     application.include_router(dashboard.router)
     application.include_router(delivery.router)
+    application.include_router(warehouse.router)
+    application.include_router(buyer_feed.router)
 
     @application.exception_handler(EntityNotFoundError)
     async def entity_not_found_handler(request: Request, exc: EntityNotFoundError) -> JSONResponse:

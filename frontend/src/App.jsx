@@ -13,8 +13,9 @@ import PickupGradingFlow  from "./pages/delivery/PickupGradingFlow";
 import QRScanPage         from "./pages/delivery/QRScanPage";
 import SellerStub         from "./pages/seller/SellerStub";
 import AdminStub          from "./pages/admin/AdminStub";
+import WarehousePage      from "./pages/warehouse/WarehousePage";
+import BuyerFeedPage      from "./pages/buyer/BuyerFeedPage";
 
-// New customer pages
 import CartPage           from "./pages/customer/CartPage";
 import CheckoutPage       from "./pages/customer/CheckoutPage";
 import OrdersPage         from "./pages/customer/OrdersPage";
@@ -34,7 +35,12 @@ export default function App() {
           path="/login"
           element={
             user
-              ? <Navigate to={role === "delivery_agent" ? "/delivery" : role === "seller" ? "/seller" : role === "admin" ? "/admin" : "/"} replace />
+              ? <Navigate to={
+                  role === "delivery_agent" ? "/delivery" :
+                  role === "warehouse" ? "/warehouse" :
+                  role === "seller" ? "/seller" :
+                  role === "admin" ? "/admin" : "/"
+                } replace />
               : <LoginPage />
           }
         />
@@ -85,8 +91,13 @@ export default function App() {
             <MyReturnsPage />
           </ProtectedRoute>
         } />
+        <Route path="/buyer-feed" element={
+          <ProtectedRoute allowedRoles={["customer"]}>
+            <BuyerFeedPage />
+          </ProtectedRoute>
+        } />
         <Route path="/health-card/:return_id" element={
-          <ProtectedRoute allowedRoles={["customer", "delivery_agent"]}>
+          <ProtectedRoute allowedRoles={["customer", "delivery_agent", "warehouse"]}>
             <HealthCardPage />
           </ProtectedRoute>
         } />
@@ -105,6 +116,13 @@ export default function App() {
         <Route path="/delivery/scan/:qr_token" element={
           <ProtectedRoute allowedRoles={["delivery_agent"]}>
             <QRScanPage />
+          </ProtectedRoute>
+        } />
+
+        {/* Warehouse */}
+        <Route path="/warehouse" element={
+          <ProtectedRoute allowedRoles={["warehouse"]}>
+            <WarehousePage />
           </ProtectedRoute>
         } />
 

@@ -30,6 +30,13 @@ async def process_grading_workflow(
     service: GradingWorkflowService = Depends(Provide[Container.grading_workflow_service]),
 ) -> ProcessGradingResponse:
     result = await service.execute(body.return_id)
+
+    from app.infrastructure.persistence.in_memory_store import STORE
+    returns = STORE.get("returns", {})
+    if body.return_id in returns and isinstance(returns[body.return_id], dict):
+        returns[body.return_id]["grade"] = result.grade
+        returns[body.return_id]["condition_description"] = result.damage_description
+
     return ProcessGradingResponse(
         return_id=result.return_id,
         grade=result.grade,

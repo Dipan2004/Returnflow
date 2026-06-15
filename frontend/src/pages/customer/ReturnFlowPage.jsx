@@ -6,6 +6,22 @@ import Header from "../../components/layout/Header";
 import Navbar from "../../components/layout/Navbar";
 import Sidebar from "../../components/layout/Sidebar";
 
+const BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+const API_KEY = import.meta.env.VITE_API_KEY || "returniq-dev-key-2026";
+
+async function apiFetch(url, options = {}) {
+  const res = await fetch(url, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      "X-API-Key": API_KEY,
+      ...options.headers,
+    },
+  });
+  if (!res.ok) throw new Error(`${res.status}`);
+  return res.json();
+}
+
 export default function ReturnFlowPage() {
   const { orderId } = useParams();
   const { orders, initiateReturn } = useCart();
@@ -52,22 +68,26 @@ export default function ReturnFlowPage() {
     route: "Standard Return"
   });
 
+  // API integration state
+  const [returnId, setReturnId] = useState(null);
+  const [apiGrade, setApiGrade] = useState(null);
+  const [apiError, setApiError] = useState(null);
+
   useEffect(() => {
     if (product) {
-      // Calculate graded values
       const basePrice = product.price;
-      const calculatedGrade = reason === "Item damaged" ? "C" : reason === "Performance not met" ? "B" : "A";
-      const recoveryMultiplier = { A: 0.85, B: 0.70, C: 0.50 }[calculatedGrade];
-      const co2 = { A: 2.3, B: 1.8, C: 1.2 }[calculatedGrade];
+      const g = apiGrade ? apiGrade.grade : (reason === "Item damaged" ? "C" : reason === "Performance not met" ? "B" : "A");
+      const recoveryMultiplier = { A: 1.0, B: 0.85, C: 0.70, D: 0.0 }[g] || 0.70;
+      const co2 = { A: 2.3, B: 1.8, C: 1.2, D: 0.0 }[g] || 1.8;
 
       setGradeOutcome({
-        grade: calculatedGrade,
+        grade: g,
         recoveryValue: Math.floor(basePrice * recoveryMultiplier),
         carbonAvoided: co2,
         route: "P2P Resell Match"
       });
     }
-  }, [reason, product]);
+  }, [reason, product, apiGrade]);
 
   if (!order || !product) {
     return (
@@ -85,27 +105,90 @@ export default function ReturnFlowPage() {
   }
 
   // Simulation scanning action
-  const handleSimulateScan = () => {
+  const handleSimulateScan = async () => {
     setIsScanning(true);
     setScanProgress(0);
+    setApiError(null);
+
+    // Step 1: Create return via API (before animation)
+    let createdReturnId = null;
+    try {
+      const imageCount = [leftImage, rightImage, topImage, bottomImage].filter(Boolean).length;
+      const user = JSON.parse(localStorage.getItem("returniq_user") || "{}");
+      const returnResp = await apiFetch(`${BASE}/returns`, {
+        method: "POST",
+        body: JSON.stringify({
+          sku_id: product.id.toString(),
+          seller_id: "seller-001",
+          buyer_id: user.name || user.username || "customer-001",
+          image_count: imageCount,
+          reason: reason,
+        }),
+      });
+      createdReturnId = returnResp.return_id;
+      setReturnId(createdReturnId);
+    } catch (err) {
+      setApiError("AI grading offline \u2013 using estimated grade");
+    }
+
+    // Run progress animation
     const interval = setInterval(() => {
       setScanProgress((prev) => {
         if (prev >= 100) {
           clearInterval(interval);
-          setTimeout(() => {
-            setIsScanning(false);
-            setStep(3); // Go to step 3 (grade details)
-          }, 600);
           return 100;
         }
         return prev + 10;
       });
     }, 200);
+
+    // Wait for animation to complete (~2s)
+    await new Promise((resolve) => setTimeout(resolve, 2200));
+
+    // Step 2: Call grading API after animation
+    if (createdReturnId && !apiError) {
+      try {
+        const gradeResp = await apiFetch(`${BASE}/grades/process`, {
+          method: "POST",
+          body: JSON.stringify({ return_id: createdReturnId }),
+        });
+        setApiGrade({
+          grade: gradeResp.grade,
+          confidence: gradeResp.confidence,
+          damage_description: gradeResp.damage_description,
+          damage_labels: gradeResp.damage_labels || [],
+        });
+      } catch (err) {
+        setApiError("AI grading offline \u2013 using estimated grade");
+      }
+    }
+
+    setTimeout(() => {
+      setIsScanning(false);
+      setStep(3);
+    }, 600);
   };
 
-  const handleConfirmReturn = (selectedRoute) => {
-    // Save to context
+  const handleConfirmReturn = async (selectedRoute) => {
     const finalRoute = selectedRoute || gradeOutcome.route;
+
+    // Call buyer-match API
+    if (returnId) {
+      try {
+        await apiFetch(`${BASE}/buyer-match/compute`, {
+          method: "POST",
+          body: JSON.stringify({
+            return_id: returnId,
+            sku_id: product.id.toString(),
+            pincode: "751024",
+            grade: gradeOutcome.grade,
+          }),
+        });
+      } catch (_) {}
+      localStorage.setItem("returniq_last_return_id", returnId);
+    }
+
+    // Keep existing localStorage flow for MyReturns compat
     initiateReturn(
       order.orderId,
       product.id,
@@ -115,7 +198,7 @@ export default function ReturnFlowPage() {
       finalRoute,
       reason
     );
-    setStep(5); // Go to QR Confirmation Step
+    setStep(4);
   };
 
   return (
@@ -148,8 +231,7 @@ export default function ReturnFlowPage() {
               { num: 1, label: "Reason" },
               { num: 2, label: "AI Scan" },
               { num: 3, label: "Result" },
-              { num: 4, label: "Routing" },
-              { num: 5, label: "Scheduled" }
+              { num: 4, label: "Scheduled" }
             ].map((s) => {
               const active = step === s.num;
               const completed = step > s.num;
@@ -172,7 +254,7 @@ export default function ReturnFlowPage() {
                   <span style={{ fontSize: "12px", fontWeight: active || completed ? "bold" : "normal", color: active ? "#ffa41c" : completed ? "#27726b" : "#666" }}>
                     {s.label}
                   </span>
-                  {s.num < 5 && <div style={{ flex: 1, height: "1px", backgroundColor: "#ddd", margin: "0 8px" }} />}
+                  {s.num < 4 && <div style={{ flex: 1, height: "1px", backgroundColor: "#ddd", margin: "0 8px" }} />}
                 </div>
               );
             })}
@@ -559,146 +641,162 @@ export default function ReturnFlowPage() {
           {/* STEP 3: DISPLAY GRADED RESULT */}
           {step === 3 && (
             <div style={{ padding: "24px" }}>
-              <h2 style={{ fontSize: "18px", fontWeight: "bold", margin: "0 0 6px 0", textAlign: "center" }}>AI Grading Assessment Result</h2>
-              <p style={{ fontSize: "13px", color: "#565959", textAlign: "center", margin: "0 0 24px 0" }}>
-                Amazon Bedrock has completed visual and operational inspection analysis.
-              </p>
+              {gradeOutcome.grade === "D" ? (
+                <>
+                  <div style={{ textAlign: "center", marginBottom: 24 }}>
+                    <div style={{ fontSize: 48, marginBottom: 12 }}>❌</div>
+                    <h2 style={{ fontSize: "20px", fontWeight: "bold", margin: "0 0 8px 0", color: "#c40000" }}>Return Rejected</h2>
+                    <p style={{ fontSize: "14px", color: "#565959", maxWidth: 460, margin: "0 auto", lineHeight: 1.5 }}>
+                      Our AI detected customer-caused damage. This item is not eligible for return per Amazon policy.
+                    </p>
+                  </div>
+                  <div style={{
+                    backgroundColor: "#f8d7da", border: "1px solid #f5c6cb", borderRadius: 8,
+                    padding: 16, marginBottom: 24, fontSize: 13, color: "#721c24",
+                  }}>
+                    <strong>Assessment:</strong> {apiGrade ? apiGrade.damage_description : "Item shows customer-caused damage."}
+                    {apiGrade && (
+                      <span style={{ display: "block", marginTop: 4 }}>Confidence: {apiGrade.confidence?.toFixed(1)}%</span>
+                    )}
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "center" }}>
+                    <button
+                      onClick={async () => {
+                        if (returnId) {
+                          try { await apiFetch(`${BASE}/returns/${returnId}/status`, { method: "PATCH", body: JSON.stringify({ status: "REJECTED" }) }); } catch {}
+                        }
+                        navigate("/orders");
+                      }}
+                      style={{
+                        backgroundColor: "#ffd814",
+                        border: "1px solid #fcd200",
+                        color: "#111",
+                        padding: "10px 32px",
+                        borderRadius: "20px",
+                        fontWeight: "bold",
+                        cursor: "pointer",
+                      }}
+                    >
+                      Okay, I understand
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <h2 style={{ fontSize: "18px", fontWeight: "bold", margin: "0 0 6px 0", textAlign: "center" }}>AI Grading Assessment Result</h2>
+                  <p style={{ fontSize: "13px", color: "#565959", textAlign: "center", margin: "0 0 24px 0" }}>
+                    Amazon Bedrock has completed visual and operational inspection analysis.
+                  </p>
 
-              {/* Result card */}
-              <div style={{
-                backgroundColor: "#f6faf9",
-                border: "1px solid #e3ebe8",
-                borderRadius: "8px",
-                padding: "20px",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                marginBottom: "24px"
-              }}>
-                <div>
-                  <span style={{ fontSize: "11px", color: "#565959", textTransform: "uppercase", fontWeight: "bold", display: "block" }}>Verified Grade</span>
-                  <strong style={{ fontSize: "32px", color: "#27726b", display: "block", marginTop: "4px" }}>Grade {gradeOutcome.grade}</strong>
-                  <span style={{ fontSize: "12px", color: "#007600", fontWeight: "bold", display: "block", marginTop: "4px" }}>
-                    🌱 Very Minor Wear - Fully functional and resellable.
-                  </span>
-                </div>
-                
-                <div style={{
-                  width: "80px",
-                  height: "80px",
-                  borderRadius: "50%",
-                  backgroundColor: "#27726b",
-                  color: "white",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: "36px",
-                  fontWeight: "bold",
-                  boxShadow: "0 4px 12px rgba(39,114,107,0.2)"
-                }}>
-                  {gradeOutcome.grade}
-                </div>
-              </div>
+                  {/* Grade banner */}
+                  {gradeOutcome.grade === "A" && (
+                    <div style={{ backgroundColor: "#d4edda", border: "1px solid #c3e6cb", borderRadius: 8, padding: 12, marginBottom: 16, fontSize: 13, color: "#155724", textAlign: "center" }}>
+                      ✅ Item is Like New. You receive <strong>100% refund</strong>.
+                    </div>
+                  )}
+                  {gradeOutcome.grade === "B" && (
+                    <div style={{ backgroundColor: "#fff3cd", border: "1px solid #ffeeba", borderRadius: 8, padding: 12, marginBottom: 16, fontSize: 13, color: "#856404", textAlign: "center" }}>
+                      Item is in Good Condition. You receive <strong>85% refund</strong>.
+                    </div>
+                  )}
+                  {gradeOutcome.grade === "C" && (
+                    <div style={{ backgroundColor: "#f8d7da", border: "1px solid #f5c6cb", borderRadius: 8, padding: 12, marginBottom: 16, fontSize: 13, color: "#721c24", textAlign: "center" }}>
+                      Item has Fair Condition. You receive <strong>70% refund</strong>.
+                    </div>
+                  )}
 
-              {/* Details table */}
-              <div style={{ display: "flex", flexDirection: "column", gap: "10px", fontSize: "14px", marginBottom: "24px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid #eee", paddingBottom: "6px" }}>
-                  <span style={{ color: "#565959" }}>Original Purchase Price</span>
-                  <strong>₹{product.price}</strong>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid #eee", paddingBottom: "6px" }}>
-                  <span style={{ color: "#565959" }}>ReturnIQ Resell Valuation</span>
-                  <strong style={{ color: "#007600" }}>₹{gradeOutcome.recoveryValue}</strong>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid #eee", paddingBottom: "6px" }}>
-                  <span style={{ color: "#565959" }}>Carbon CO₂ Offset Saving</span>
-                  <strong style={{ color: "#27726b" }}>🌱 {gradeOutcome.carbonAvoided} kg CO₂</strong>
-                </div>
-              </div>
-
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px" }}>
-                <button
-                  onClick={() => setStep(4)}
-                  style={{
-                    backgroundColor: "#ffd814",
-                    border: "1px solid #fcd200",
-                    color: "#111",
-                    padding: "10px 24px",
-                    borderRadius: "20px",
-                    fontWeight: "bold",
-                    cursor: "pointer"
-                  }}
-                >
-                  Review Refund Routes
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* STEP 4: ROUTE RECOMMENDATION OPTIONS */}
-          {step === 4 && (
-            <div style={{ padding: "24px" }}>
-              <h2 style={{ fontSize: "18px", fontWeight: "bold", margin: "0 0 6px 0" }}>Choose Refund Option</h2>
-              <p style={{ fontSize: "13px", color: "#565959", margin: "0 0 20px 0" }}>
-                Based on current matching logistics, choose how to route your returned item.
-              </p>
-
-              <div style={{ display: "flex", flexDirection: "column", gap: "16px", marginBottom: "24px" }}>
-                
-                {/* Peer to Peer Resell route (RECOMMENDED) */}
-                <div style={{
-                  border: "2px solid #27726b",
-                  borderRadius: "8px",
-                  padding: "18px",
-                  backgroundColor: "#f0faf8",
-                  cursor: "pointer"
-                }}
-                  onClick={() => handleConfirmReturn("P2P Resell Match")}
-                >
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "8px" }}>
+                  {/* Result card */}
+                  <div style={{
+                    backgroundColor: "#f6faf9",
+                    border: "1px solid #e3ebe8",
+                    borderRadius: "8px",
+                    padding: "20px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    marginBottom: "24px"
+                  }}>
                     <div>
-                      <span style={{ fontSize: "11px", backgroundColor: "#27726b", color: "white", padding: "2px 8px", borderRadius: "10px", fontWeight: "bold", textTransform: "uppercase" }}>Recommended Option</span>
-                      <h3 style={{ fontSize: "16px", fontWeight: "bold", margin: "6px 0 2px 0", color: "#27726b" }}>♻️ ReturnIQ Instant Local Resell Match</h3>
+                      <span style={{ fontSize: "11px", color: "#565959", textTransform: "uppercase", fontWeight: "bold", display: "block" }}>Verified Grade</span>
+                      <strong style={{ fontSize: "32px", color: "#27726b", display: "block", marginTop: "4px" }}>Grade {gradeOutcome.grade}</strong>
+                      <span style={{ fontSize: "12px", color: "#007600", fontWeight: "bold", display: "block", marginTop: "4px" }}>
+                        {apiGrade ? apiGrade.damage_description : "Item assessed successfully."}
+                      </span>
+                      {apiGrade && (
+                        <span style={{ fontSize: "11px", color: "#565959", display: "block", marginTop: "2px" }}>
+                          Confidence: {apiGrade.confidence?.toFixed(1)}%
+                        </span>
+                      )}
+                      {apiError && (
+                        <span style={{ fontSize: "11px", color: "#c45500", display: "block", marginTop: "4px" }}>
+                          ⚠️ {apiError}
+                        </span>
+                      )}
                     </div>
-                    <div style={{ textAlign: "right" }}>
-                      <span style={{ fontSize: "11px", color: "#565959", textTransform: "uppercase" }}>Refund Amount</span>
-                      <div style={{ fontSize: "20px", fontWeight: "bold", color: "#27726b" }}>₹{gradeOutcome.recoveryValue}</div>
-                    </div>
-                  </div>
-                  <p style={{ fontSize: "13px", color: "#333", margin: "0 0 10px 0", lineHeight: "1.4" }}>
-                    We've matched your item with a buyer <strong>2.3 km away</strong>. Your item bypasses shipping back to the hub. Refund will clear instantly upon delivery agent pickup verification tomorrow!
-                  </p>
-                  <span style={{ fontSize: "12px", color: "#007600", fontWeight: "bold" }}>🌱 Saves {gradeOutcome.carbonAvoided} kg CO₂ and bypasses the landfill entirely!</span>
-                </div>
-
-                {/* Standard Return */}
-                <div style={{
-                  border: "1px solid #ddd",
-                  borderRadius: "8px",
-                  padding: "18px",
-                  backgroundColor: "white",
-                  cursor: "pointer"
-                }}
-                  onClick={() => handleConfirmReturn("Standard Return")}
-                >
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "8px" }}>
-                    <h3 style={{ fontSize: "15px", fontWeight: "bold", margin: 0, color: "#111" }}>📦 Standard Return shipping</h3>
-                    <div style={{ textAlign: "right" }}>
-                      <span style={{ fontSize: "11px", color: "#565959", textTransform: "uppercase" }}>Refund Amount</span>
-                      <div style={{ fontSize: "18px", fontWeight: "bold" }}>₹{Math.floor(gradeOutcome.recoveryValue * 0.9)}</div>
+                    <div style={{
+                      width: "80px", height: "80px", borderRadius: "50%",
+                      backgroundColor: "#27726b", color: "white",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: "36px", fontWeight: "bold",
+                      boxShadow: "0 4px 12px rgba(39,114,107,0.2)"
+                    }}>
+                      {gradeOutcome.grade}
                     </div>
                   </div>
-                  <p style={{ fontSize: "12px", color: "#565959", margin: "0", lineHeight: "1.4" }}>
-                    Ship back to Amazon's fulfillment center. Refund processed in 5–7 business days after item inspection. (Deducts ₹40 return processing fee).
-                  </p>
-                </div>
 
-              </div>
+                  {/* Details table */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: "10px", fontSize: "14px", marginBottom: "24px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid #eee", paddingBottom: "6px" }}>
+                      <span style={{ color: "#565959" }}>Original Purchase Price</span>
+                      <strong>₹{product.price}</strong>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid #eee", paddingBottom: "6px" }}>
+                      <span style={{ color: "#565959" }}>Your Refund Amount</span>
+                      <strong style={{ color: "#007600" }}>₹{gradeOutcome.recoveryValue}</strong>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid #eee", paddingBottom: "6px" }}>
+                      <span style={{ color: "#565959" }}>Carbon CO₂ Offset Saving</span>
+                      <strong style={{ color: "#27726b" }}>🌱 {gradeOutcome.carbonAvoided} kg CO₂</strong>
+                    </div>
+                  </div>
+
+                  <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px" }}>
+                    <button
+                      onClick={() => navigate("/orders")}
+                      style={{
+                        backgroundColor: "white",
+                        border: "1px solid #d5d9d9",
+                        color: "#111",
+                        padding: "10px 24px",
+                        borderRadius: "20px",
+                        fontWeight: "bold",
+                        cursor: "pointer"
+                      }}
+                    >
+                      Keep Item
+                    </button>
+                    <button
+                      onClick={() => handleConfirmReturn()}
+                      style={{
+                        backgroundColor: "#ffd814",
+                        border: "1px solid #fcd200",
+                        color: "#111",
+                        padding: "10px 24px",
+                        borderRadius: "20px",
+                        fontWeight: "bold",
+                        cursor: "pointer"
+                      }}
+                    >
+                      Return Item
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           )}
 
-          {/* STEP 5: FINAL QR & PICKUP CONFIRMATION */}
-          {step === 5 && (
+          {/* STEP 4: FINAL QR & PICKUP CONFIRMATION */}
+          {step === 4 && (
             <div style={{ padding: "30px", textAlign: "center" }}>
               <div style={{ fontSize: "48px", color: "#27726b", marginBottom: "16px" }}>✓</div>
               <h2 style={{ fontSize: "22px", fontWeight: "bold", color: "#111", margin: "0 0 8px 0" }}>Return Pick-Up Scheduled</h2>
@@ -733,7 +831,7 @@ export default function ReturnFlowPage() {
                   </div>
                 </div>
                 <strong style={{ display: "block", fontSize: "15px", color: "#27726b", marginTop: "12px" }}>
-                  Scan code: RET-{order.orderId}
+                  Scan code: {returnId || `RET-${order.orderId}`}
                 </strong>
                 <span style={{ fontSize: "11px", color: "#767676", display: "block", marginTop: "4px" }}>
                   Scan upon pickup to trigger instant refund

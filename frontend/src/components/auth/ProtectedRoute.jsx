@@ -4,10 +4,11 @@ import { Lock } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 
 const ROLE_ROOT = {
-  customer:       "/",
+  customer: "/",
   delivery_agent: "/delivery",
-  seller:         "/seller",
-  admin:          "/admin",
+  warehouse: "/warehouse",
+  seller: "/seller",
+  admin: "/admin",
 };
 
 export default function ProtectedRoute({ allowedRoles, children }) {
@@ -31,8 +32,8 @@ export default function ProtectedRoute({ allowedRoles, children }) {
           <button
             onClick={() => navigate(ROLE_ROOT[role] || "/")}
             style={{
-              width: "100%", background: "#eb9834", border: "none", borderRadius: 3,
-              padding: 10, fontSize: 14, cursor: "pointer", marginTop: 20,
+              width: "100%", background: "#ffd814", border: "1px solid #c59a08", borderRadius: 4,
+              padding: 10, fontSize: 14, cursor: "pointer", marginTop: 20, fontWeight: 600,
             }}
           >
             Go to my dashboard

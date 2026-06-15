@@ -16,7 +16,7 @@ router = APIRouter(prefix="/warehouse", tags=["warehouse"])
 
 
 @router.get("/queue")
-async def get_warehouse_queue() -> list[dict]:
+async def get_warehouse_queue() -> list[dict[str, object]]:
     items = get_returns_by_status("PICKED_UP")
     result = []
     for r in items:

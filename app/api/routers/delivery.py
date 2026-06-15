@@ -35,7 +35,7 @@ DEMO_GRADE_MAP = {
 
 
 @router.get("/queue")
-async def get_delivery_queue() -> list[dict]:
+async def get_delivery_queue() -> list[dict[str, object]]:
     real_items = get_returns_by_status("PENDING_PICKUP")
     result = []
     for r in real_items:
@@ -70,19 +70,17 @@ async def get_delivery_queue() -> list[dict]:
 
 @router.post("/{return_id}/confirm")
 async def confirm_pickup(
-    return_id: str, body: dict | None = None,
+    return_id: str,
 ) -> dict[str, object]:
-    if body is None:
-        body = {}
     item = get_return(return_id)
     if not item:
         add_return(
             return_id,
             {
                 "return_id": return_id,
-                "product_name": body.get("product_name", "Unknown"),
-                "sku_id": body.get("sku_id", ""),
-                "buyer_id": body.get("agent_id", "agent"),
+                "product_name": "Unknown",
+                "sku_id": "",
+                "buyer_id": "agent",
                 "status": "PENDING_PICKUP",
             },
         )

@@ -10,11 +10,15 @@ REJECT_KEYWORDS = [
     "water damage", "scratched screen", "bent",
 ]
 
-GRADE_CONFIG = {
+GRADE_CONFIG: dict[str, dict[str, float | str]] = {
     "A": {"refund_pct": 1.0, "label": "Like New", "confidence": 95.0},
     "B": {"refund_pct": 0.85, "label": "Good Condition", "confidence": 87.0},
     "C": {"refund_pct": 0.70, "label": "Fair Condition", "confidence": 78.0},
-    "D": {"refund_pct": 0.0, "label": "Damaged – Return Rejected", "confidence": 95.0},
+    "D": {
+        "refund_pct": 0.0,
+        "label": "Damaged – Return Rejected",
+        "confidence": 95.0,
+    },
 }
 
 

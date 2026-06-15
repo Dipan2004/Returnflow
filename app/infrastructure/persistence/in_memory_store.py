@@ -4,7 +4,6 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-# Single shared dict — all in-memory repos read/write here
 STORE: dict[str, dict[str, Any]] = {
     "returns": {},
     "grades": {},
@@ -13,29 +12,47 @@ STORE: dict[str, dict[str, Any]] = {
 }
 
 
-def add_return(return_id: str, data: dict) -> None:
-    STORE["returns"][return_id] = {**data, "created_at": datetime.utcnow().isoformat()}
+def add_return(return_id: str, data: dict[str, Any]) -> None:
+    STORE["returns"][return_id] = {
+        **data,
+        "created_at": datetime.utcnow().isoformat(),
+    }
 
 
-def get_return(return_id: str) -> dict | None:
-    return STORE["returns"].get(return_id)
+def get_return(return_id: str) -> dict[str, Any] | None:
+    result: Any = STORE["returns"].get(return_id)
+    if result is None:
+        return None
+    return dict(result)
 
 
-def update_return_status(return_id: str, status: str) -> dict | None:
+def update_return_status(
+    return_id: str, status: str,
+) -> dict[str, Any] | None:
     if return_id in STORE["returns"]:
         STORE["returns"][return_id]["status"] = status
-        STORE["returns"][return_id]["updated_at"] = datetime.utcnow().isoformat()
-        return STORE["returns"][return_id]
+        STORE["returns"][return_id]["updated_at"] = (
+            datetime.utcnow().isoformat()
+        )
+        return dict(STORE["returns"][return_id])
     return None
 
 
-def get_returns_by_status(status: str) -> list[dict]:
-    return [r for r in STORE["returns"].values() if r.get("status") == status]
+def get_returns_by_status(status: str) -> list[dict[str, Any]]:
+    return [
+        dict(r) for r in STORE["returns"].values()
+        if r.get("status") == status
+    ]
 
 
-def add_grade(return_id: str, grade_data: dict) -> None:
+def add_grade(return_id: str, grade_data: dict[str, Any]) -> None:
     STORE["grades"][return_id] = grade_data
+    if return_id in STORE["returns"]:
+        STORE["returns"][return_id]["grade"] = grade_data.get("grade", "")
 
 
-def get_grade(return_id: str) -> dict | None:
-    return STORE["grades"].get(return_id)
+def get_grade(return_id: str) -> dict[str, Any] | None:
+    result: Any = STORE["grades"].get(return_id)
+    if result is None:
+        return None
+    return dict(result)

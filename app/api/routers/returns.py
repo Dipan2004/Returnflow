@@ -180,7 +180,7 @@ class UpdateStatusRequest(BaseModel):
 
 
 @router.patch("/{return_id}/status")
-async def patch_return_status(return_id: str, payload: UpdateStatusRequest) -> dict:
+async def patch_return_status(return_id: str, payload: UpdateStatusRequest) -> dict[str, object]:
     updated = update_return_status_in_store(return_id, payload.status)
     if not updated:
         raise HTTPException(status_code=404, detail="Return not found")

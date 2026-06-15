@@ -14,7 +14,7 @@ router = APIRouter(prefix="/buyer-feed", tags=["buyer_feed"])
 
 
 @router.get("")
-async def get_buyer_feed(buyer_id: str = Query(default="")) -> list[dict]:
+async def get_buyer_feed(buyer_id: str = Query(default="")) -> list[dict[str, object]]:
     items = get_returns_by_status("AVAILABLE_FOR_RESALE")
     result = []
     for r in items:
@@ -43,7 +43,7 @@ async def get_buyer_feed(buyer_id: str = Query(default="")) -> list[dict]:
 
 
 @router.post("/{return_id}/purchase")
-async def purchase_item(return_id: str, body: dict) -> dict[str, object]:
+async def purchase_item(return_id: str, body: dict[str, str]) -> dict[str, object]:
     buyer_id = body.get("buyer_id", "")
     item = get_return(return_id)
     if not item:

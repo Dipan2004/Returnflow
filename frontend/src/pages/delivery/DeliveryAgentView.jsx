@@ -133,7 +133,30 @@ export default function DeliveryAgentView() {
                 </div>
 
                 {/* Start Pickup Button */}
-                <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+                  <button
+                    onClick={async () => {
+                      setQueue((prev) => prev.filter((q) => q.return_id !== item.return_id));
+                      try {
+                        await apiFetch(`${BASE}/delivery/${item.return_id}/confirm`, {
+                          method: "POST",
+                          body: JSON.stringify({ return_id: item.return_id }),
+                        });
+                      } catch {}
+                    }}
+                    style={{
+                      backgroundColor: "#ffa41c",
+                      color: "#111",
+                      border: "1px solid #ff9900",
+                      padding: "9px 18px",
+                      borderRadius: 4,
+                      fontSize: 13,
+                      fontWeight: "bold",
+                      cursor: "pointer",
+                    }}
+                  >
+                    📦 PICKED UP
+                  </button>
                   <Link
                     to={`/delivery/pickup/${item.return_id}`}
                     state={{ returnData: item }}
@@ -149,7 +172,7 @@ export default function DeliveryAgentView() {
                       textAlign: "center",
                     }}
                   >
-                    Start Pickup →
+                    Detailed Pickup →
                   </Link>
                 </div>
               </div>

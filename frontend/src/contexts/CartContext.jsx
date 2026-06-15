@@ -127,13 +127,18 @@ export function CartProvider({ children }) {
   }
 
   function initiateReturn(orderId, productId, returniqGrade, recoveryValue, carbonAvoided, routeOption, reason) {
-    const returnId = "ret-" + Math.floor(100000 + Math.random() * 900000);
+    const product = products.find((p) => p.id === productId) || {};
+    const lastReturnId = localStorage.getItem("returniq_last_return_id");
+    const returnId = lastReturnId || ("ret-" + Math.floor(100000 + Math.random() * 900000));
     const newReturn = {
       return_id: returnId,
       order_id: orderId,
       productId: productId,
+      product_name: product.name || "Product",
+      image_url: product.image || product.images?.[0] || "",
+      mrp: product.price || 0,
       reason: reason,
-      status: routeOption === "Standard Return" ? "GRADED" : "PENDING_PICKUP",
+      status: "PENDING_PICKUP",
       created_at: new Date().toISOString(),
       pickup_window: "Tomorrow, 10 AM – 2 PM",
       reference_num: "RET-" + Math.floor(100000 + Math.random() * 900000),
@@ -144,6 +149,11 @@ export function CartProvider({ children }) {
     };
 
     setReturns((prev) => [newReturn, ...prev]);
+
+    // Also persist to localStorage for MyReturnsPage
+    const existing = JSON.parse(localStorage.getItem("returniq_returns") || "[]");
+    existing.unshift(newReturn);
+    localStorage.setItem("returniq_returns", JSON.stringify(existing));
 
     // Update status in orders
     setOrders((prev) =>

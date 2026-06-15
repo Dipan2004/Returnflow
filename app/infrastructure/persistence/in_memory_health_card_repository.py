@@ -27,7 +27,7 @@ class InMemoryHealthCardRepository(HealthCardRepository):
         return STORE["qr_tokens"].get(token)
 
     async def consume_qr_token(self, token: str, agent_id: str) -> QRToken:
-        qr = STORE["qr_tokens"].get(token)
+        qr: QRToken | None = STORE["qr_tokens"].get(token)
         if qr is None:
             raise QRTokenNotFoundError(token)
         qr.consume(agent_id)

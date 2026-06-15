@@ -1,6 +1,8 @@
 # app/container.py
 from __future__ import annotations
 
+from typing import Any
+
 from dependency_injector import containers, providers
 
 from app.application.services.grading_workflow_service import GradingWorkflowService
@@ -140,73 +142,75 @@ from app.infrastructure.persistence.in_memory_workflow_state_repository import (
 from app.infrastructure.storage.s3_image_storage import S3ImageStorage
 
 
-def _build_return_repository(table):
+def _build_return_repository(table: Any) -> Any:
     if table is None:
         return InMemoryReturnRepository()
     return DynamoDBReturnRepository(table=table)
 
 
-def _build_condition_grade_repository(table):
+def _build_condition_grade_repository(table: Any) -> Any:
     if table is None:
         return InMemoryConditionGradeRepository()
     return DynamoDBConditionGradeRepository(table=table)
 
 
-def _build_workflow_state_repository(table):
+def _build_workflow_state_repository(table: Any) -> Any:
     if table is None:
         return InMemoryWorkflowStateRepository()
     return DynamoDBWorkflowStateRepository(table=table)
 
 
-def _build_disposition_repository(table):
+def _build_disposition_repository(table: Any) -> Any:
     if table is None:
         return InMemoryDispositionRepository()
     return DynamoDBDispositionRepository(table=table)
 
 
-def _build_fraud_repository(table):
+def _build_fraud_repository(table: Any) -> Any:
     if table is None:
         return InMemoryFraudRepository()
     return DynamoDBFraudRepository(table=table)
 
 
-def _build_buyer_match_repository(table):
+def _build_buyer_match_repository(table: Any) -> Any:
     if table is None:
         return InMemoryBuyerMatchRepository()
     return DynamoDBBuyerMatchRepository(table=table)
 
 
-def _build_health_card_repository(table):
+def _build_health_card_repository(table: Any) -> Any:
     if table is None:
         return InMemoryHealthCardRepository()
     return DynamoDBHealthCardRepository(table=table)
 
 
-def _build_verification_audit_repository(table):
+def _build_verification_audit_repository(table: Any) -> Any:
     if table is None:
         return InMemoryVerificationAuditRepository()
     return DynamoDBVerificationAuditRepository(table=table)
 
 
-def _build_outcome_repository(table):
+def _build_outcome_repository(table: Any) -> Any:
     if table is None:
         return InMemoryOutcomeRepository()
     return DynamoDBOutcomeRepository(table=table)
 
 
-def _build_dashboard_repository(table):
+def _build_dashboard_repository(table: Any) -> Any:
     if table is None:
         return InMemoryDashboardRepository()
     return DynamoDBDashboardRepository(table=table)
 
 
-def _build_fraud_history_port(table):
+def _build_fraud_history_port(table: Any) -> Any:
     if table is None:
         return InMemoryFraudHistoryAdapter()
     return DynamoDBFraudHistoryAdapter(table=table)
 
 
-def _build_image_storage(s3_client, bucket, upload_expiry_seconds):
+def _build_image_storage(
+    s3_client: Any, bucket: Any, upload_expiry_seconds: Any,
+) -> Any:
     if s3_client is None:
         return StubImageStorage()
     return S3ImageStorage(
@@ -216,13 +220,20 @@ def _build_image_storage(s3_client, bucket, upload_expiry_seconds):
     )
 
 
-def _build_description_adapter(bedrock_client, model_id):
+def _build_description_adapter(
+    bedrock_client: Any, model_id: Any,
+) -> Any:
     if bedrock_client is None:
         return StubDescriptionAdapter()
     return BedrockDescriptionAdapter(bedrock_client=bedrock_client, model_id=model_id)
 
 
-def _build_grading_adapter(rekognition_client, description_port, max_labels, min_confidence):
+def _build_grading_adapter(
+    rekognition_client: Any,
+    description_port: Any,
+    max_labels: Any,
+    min_confidence: Any,
+) -> Any:
     if rekognition_client is None:
         return DemoGradingAdapter()
     return RekognitionGradingAdapter(
@@ -233,7 +244,9 @@ def _build_grading_adapter(rekognition_client, description_port, max_labels, min
     )
 
 
-def _build_human_review_queue(sqs_client, queue_url):
+def _build_human_review_queue(
+    sqs_client: Any, queue_url: Any,
+) -> Any:
     if sqs_client is None:
         return StubHumanReviewAdapter()
     return SQSHumanReviewAdapter(sqs_client=sqs_client, queue_url=queue_url)

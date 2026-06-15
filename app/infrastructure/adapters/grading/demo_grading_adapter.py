@@ -22,7 +22,7 @@ def _get_reason_for_return(return_id: str) -> str:
     returns = STORE.get("returns", {})
     data = returns.get(return_id)
     if isinstance(data, dict):
-        return data.get("reason", "")
+        return str(data.get("reason", ""))
     return ""
 
 
@@ -64,9 +64,10 @@ class DemoGradingAdapter(GradingPort):
             grade = Grade.C
 
         config = GRADE_CONFIG[grade.value]
+        confidence: float = float(config["confidence"])
         return GradingResult(
             grade=grade,
-            confidence=config["confidence"],
+            confidence=confidence,
             damage_labels=[],
             damage_description=f"Item is in {config['label']} condition.",
             raw_label_count=0,

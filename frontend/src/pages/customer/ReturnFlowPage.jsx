@@ -123,6 +123,8 @@ export default function ReturnFlowPage() {
           buyer_id: user.name || user.username || "customer-001",
           image_count: imageCount,
           reason: reason,
+          product_name: product.name,
+          original_price: product.price,
         }),
       });
       createdReturnId = returnResp.return_id;

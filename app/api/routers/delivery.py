@@ -40,45 +40,40 @@ async def get_delivery_queue() -> list[dict]:
     result = []
     for r in real_items:
         grade_data = get_grade(r["return_id"]) or {}
+        raw_name = r.get("product_name", r.get("sku_id", "Unknown"))
+        from app.api.routers.returns import _resolve_product_name
+        product_name = (
+            raw_name if raw_name != r.get("sku_id") else
+            _resolve_product_name(r.get("sku_id", ""))
+        )
         result.append(
             {
                 "return_id": r["return_id"],
-                "product_name": r.get("product_name", r.get("sku_id", "Unknown Product")),
+                "product_name": product_name,
                 "sku_id": r.get("sku_id", ""),
-                "grade": grade_data.get("grade", "B"),
-                "pickup_address": r.get("pickup_address", "Customer Address"),
-                "pickup_window": r.get("pickup_window", "Tomorrow, 10 AM - 2 PM"),
+                "grade": grade_data.get("grade", r.get("grade", "B")),
+                "pickup_address": r.get(
+                    "pickup_address", "Customer Address"
+                ),
+                "pickup_window": r.get(
+                    "pickup_window", "Tomorrow, 10 AM - 2 PM"
+                ),
                 "status": "PENDING_PICKUP",
                 "buyer_id": r.get("buyer_id", ""),
                 "image_count": r.get("image_count", 0),
             }
         )
     if not result:
-        return [
-            {
-                "return_id": "demo-r001",
-                "product_name": "Nike Air Max 270",
-                "sku_id": "1",
-                "grade": "A",
-                "pickup_address": "Patia, Bhubaneswar 751024",
-                "pickup_window": "Today, 10 AM - 2 PM",
-                "status": "PENDING_PICKUP",
-            },
-            {
-                "return_id": "demo-r002",
-                "product_name": "boAt Rockerz 450",
-                "sku_id": "2",
-                "grade": "B",
-                "pickup_address": "Saheed Nagar, Bhubaneswar 751007",
-                "pickup_window": "Today, 2 PM - 6 PM",
-                "status": "PENDING_PICKUP",
-            },
-        ]
+        return []
     return result
 
 
 @router.post("/{return_id}/confirm")
-async def confirm_pickup(return_id: str, body: dict = {}) -> dict[str, object]:
+async def confirm_pickup(
+    return_id: str, body: dict | None = None,
+) -> dict[str, object]:
+    if body is None:
+        body = {}
     item = get_return(return_id)
     if not item:
         add_return(

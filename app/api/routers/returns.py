@@ -21,11 +21,60 @@ from app.container import Container
 from app.infrastructure.persistence.in_memory_store import (
     add_return,
     get_grade,
+)
+from app.infrastructure.persistence.in_memory_store import (
     get_return as get_return_from_store,
+)
+from app.infrastructure.persistence.in_memory_store import (
     update_return_status as update_return_status_in_store,
 )
 
 router = APIRouter(prefix="/returns", tags=["returns"])
+
+_PRODUCTS: dict[str, str] = {
+    "p001": "Finegrip Black Pens Jar (Pack of 50)",
+    "p002": "Colored Gel Pens Set (24 Colors)",
+    "p003": "CELXY Premium Black Rollerball Pen",
+    "p004": "Pastel Colored Fine Liner Pens",
+    "p005": "Premium Linen Cushion Covers Set",
+    "p006": "Ceramic Figurine Vase & Sculpture Art",
+    "p007": "Collapsible Home Storage Box with Lid",
+    "p008": "Geometric Metal Table Lamp",
+    "p009": "Nike Air Max 270",
+    "p010": "Adidas Classic Sport Sneakers",
+    "p011": "Women's Pointed Toe High Heels",
+    "p012": "Classic Leather Ladies Handbag",
+    "p013": "Memory Foam Orthopedic Mattress",
+    "p014": "Ergonomic Office Executive Chair",
+    "p015": "Fabric 3-Seater Living Room Sofa",
+    "p016": "Premium Faux Leather Bean Bag",
+    "p017": "boAt Rockerz 450 Headphones",
+    "p018": "1.5 Ton 5 Star Inverter Split AC",
+    "p019": "240L Frost-Free Refrigerator",
+    "p020": "20L Solo Microwave Oven",
+    "p021": "7kg Front Load Washing Machine",
+    "p022": "Premium Canvas Pencil Pouch",
+    "p023": "Desktop Pen Stand Organizer",
+    "p024": "Stainless Steel Insulated Lunch Box",
+    "p025": "Vacuum Insulated Steel Sports Flask",
+    "p026": "Gel Pen Pack - 12 Colors",
+    "p027": "Non-Stick Wok Pan (26cm)",
+    "p028": "Premium Chef Knife Set with Block",
+    "p029": "Stainless Steel Kitchen Colander",
+    "p030": "Cute Ceramic Cat Mug",
+    "p031": "Leak-Proof Food Lunch Jar",
+    "p032": "Insulated Beverage Flask",
+    "p033": "Non-Slip Silicone Pastry Mat",
+    "p034": "Home Gym Adjustable Dumbbells Set",
+    "p035": "Set of 6 Ceramic Coffee Mugs",
+    "p036": "Double-Wall Insulated Steel Flask",
+    "p037": "Smart Robot Vacuum Cleaner",
+    "p038": "Wireless Keyboard & Mouse Combo",
+}
+
+
+def _resolve_product_name(sku_id: str) -> str:
+    return _PRODUCTS.get(sku_id, sku_id)
 
 
 @router.post("", response_model=CreateReturnResponse, status_code=status.HTTP_201_CREATED)
@@ -51,8 +100,13 @@ async def create_return(
             "status": "PENDING_PICKUP",
             "image_count": getattr(payload, "image_count", 0),
             "reason": getattr(payload, "reason", ""),
-            "product_name": payload.sku_id,
-            "pickup_address": getattr(payload, "pickup_address", "Customer Address, Bhubaneswar"),
+            "product_name": getattr(
+                payload, "product_name", ""
+            ) or _resolve_product_name(payload.sku_id),
+            "pickup_address": getattr(
+                payload, "pickup_address",
+                "Customer Address, Bhubaneswar",
+            ),
             "pickup_window": "Tomorrow, 10 AM - 2 PM",
             "original_price": getattr(payload, "original_price", 0),
         },

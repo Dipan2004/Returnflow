@@ -14,6 +14,12 @@ class CreateReturnRequest(BaseSchema):
     buyer_id: str = Field(min_length=1, max_length=100)
     image_count: int = Field(default=3, ge=1, le=10)
     reason: str = Field(default="", max_length=500)
+    product_name: str = Field(default="", max_length=200)
+    original_price: float = Field(default=0)
+    pickup_address: str = Field(
+        default="Customer Address, Bhubaneswar",
+        max_length=300,
+    )
 
     @field_validator("sku_id", "seller_id", "buyer_id", mode="before")
     @classmethod

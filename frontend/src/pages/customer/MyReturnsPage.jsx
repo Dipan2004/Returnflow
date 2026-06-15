@@ -108,8 +108,16 @@ export default function MyReturnsPage() {
     };
   }, []);
 
-  const badge = selectedReturn ? STATUS_BADGES[selectedReturn.status] : null;
-  const currentStepIndex = selectedReturn ? STATUS_INDEX[selectedReturn.status] : 0;
+  const badge = selectedReturn
+    ? (STATUS_BADGES[selectedReturn.status] || {
+        text: selectedReturn.status || "Unknown",
+        color: "#333",
+        bg: "#eee",
+      })
+    : null;
+  const currentStepIndex = selectedReturn
+    ? (STATUS_INDEX[selectedReturn.status] ?? 0)
+    : 0;
 
   return (
     <div style={{ backgroundColor: "#fcfcfc", minHeight: "100vh", fontFamily: "sans-serif", paddingBottom: 60 }}>

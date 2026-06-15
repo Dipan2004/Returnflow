@@ -57,4 +57,9 @@ async def approve_item(return_id: str) -> ApproveResponse:
         original_price = float(returns[return_id].get("original_price", 999.0))
         resale_price = round(original_price * 0.70, 2)
         returns[return_id]["resale_price"] = resale_price
-    return ApproveResponse(return_id=return_id, approved=True, approved_at=datetime.now(UTC), resale_price=resale_price)
+    return ApproveResponse(
+        return_id=return_id,
+        approved=True,
+        approved_at=datetime.now(UTC),
+        resale_price=resale_price,
+    )

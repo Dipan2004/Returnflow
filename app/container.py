@@ -209,7 +209,11 @@ def _build_fraud_history_port(table):
 def _build_image_storage(s3_client, bucket, upload_expiry_seconds):
     if s3_client is None:
         return StubImageStorage()
-    return S3ImageStorage(client=s3_client, bucket=bucket, upload_expiry_seconds=upload_expiry_seconds)
+    return S3ImageStorage(
+        client=s3_client,
+        bucket=bucket,
+        upload_expiry_seconds=upload_expiry_seconds,
+    )
 
 
 def _build_description_adapter(bedrock_client, model_id):

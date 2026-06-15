@@ -4,7 +4,11 @@ from __future__ import annotations
 from dependency_injector.wiring import Provide, inject
 from fastapi import APIRouter, Depends
 
-from app.api.schemas.buyer_match_schemas import BuyerMatchResponse, ComputeBuyerMatchRequest, MatchedBuyer
+from app.api.schemas.buyer_match_schemas import (
+    BuyerMatchResponse,
+    ComputeBuyerMatchRequest,
+    MatchedBuyer,
+)
 from app.application.use_cases.buyer_match_dto import BuyerMatchRequest
 from app.application.use_cases.get_buyer_match_use_case import GetBuyerMatchUseCase
 from app.application.use_cases.match_buyer_use_case import MatchBuyerUseCase

@@ -101,4 +101,8 @@ async def confirm_delivery(return_id: str) -> DeliveryConfirmResponse:
                 "original_price": 999.0,
                 "address": "Patia, Bhubaneswar, 751024",
             }
-    return DeliveryConfirmResponse(return_id=return_id, confirmed=True, confirmed_at=datetime.now(UTC))
+    return DeliveryConfirmResponse(
+        return_id=return_id,
+        confirmed=True,
+        confirmed_at=datetime.now(UTC),
+    )

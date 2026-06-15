@@ -48,7 +48,10 @@ class DemoGradingAdapter(GradingPort):
                     grade=Grade.D,
                     confidence=95.0,
                     damage_labels=[],
-                    damage_description="Item shows customer-caused damage. Return rejected per policy.",
+                    damage_description=(
+                        "Item shows customer-caused damage."
+                        " Return rejected per policy."
+                    ),
                     raw_label_count=0,
                     description_used_fallback=False,
                 )

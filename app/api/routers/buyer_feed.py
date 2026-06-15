@@ -50,7 +50,10 @@ async def get_buyer_feed(
                 grade=data.get("grade", "B"),
                 original_price=price,
                 resale_price=round(price * 0.7, 2),
-                condition_description=data.get("condition_description", "Good condition with minor wear"),
+                condition_description=data.get(
+                    "condition_description",
+                    "Good condition with minor wear",
+                ),
                 original_returner_id=original_returner,
             ))
     return items

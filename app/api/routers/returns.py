@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dependency_injector.wiring import Provide, inject
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 from app.api.schemas.return_schemas import (
@@ -10,16 +10,20 @@ from app.api.schemas.return_schemas import (
     ImageUploadCompleteRequest,
     ImageUploadCompleteResponse,
     ReturnDetailResponse,
-    ReturnStatusResponse,
     UploadUrl,
 )
 from app.application.use_cases.complete_image_upload_use_case import (
     CompleteImageUploadUseCase,
 )
 from app.application.use_cases.create_return_use_case import CreateReturnUseCase
-from app.application.use_cases.get_return_status_use_case import GetReturnStatusUseCase
 from app.application.use_cases.get_return_use_case import GetReturnUseCase
 from app.container import Container
+from app.infrastructure.persistence.in_memory_store import (
+    add_return,
+    get_grade,
+    get_return as get_return_from_store,
+    update_return_status as update_return_status_in_store,
+)
 
 router = APIRouter(prefix="/returns", tags=["returns"])
 
@@ -37,18 +41,22 @@ async def create_return(
         image_count=payload.image_count,
     )
 
-    from app.infrastructure.persistence.in_memory_store import STORE
-    STORE.setdefault("returns", {})[result.return_id] = {
-        "sku_id": payload.sku_id,
-        "seller_id": payload.seller_id,
-        "buyer_id": payload.buyer_id,
-        "status": "PENDING_PICKUP",
-        "grade": "",
-        "reason": payload.reason,
-        "original_price": 999.0,
-        "address": "Patia, Bhubaneswar, 751024",
-        "pickup_window": "Today, 10 AM – 2 PM",
-    }
+    add_return(
+        result.return_id,
+        {
+            "return_id": result.return_id,
+            "sku_id": payload.sku_id,
+            "buyer_id": payload.buyer_id,
+            "seller_id": payload.seller_id,
+            "status": "PENDING_PICKUP",
+            "image_count": getattr(payload, "image_count", 0),
+            "reason": getattr(payload, "reason", ""),
+            "product_name": payload.sku_id,
+            "pickup_address": getattr(payload, "pickup_address", "Customer Address, Bhubaneswar"),
+            "pickup_window": "Tomorrow, 10 AM - 2 PM",
+            "original_price": getattr(payload, "original_price", 0),
+        },
+    )
 
     return CreateReturnResponse(
         return_id=result.return_id,
@@ -82,24 +90,16 @@ async def get_return(
     )
 
 
-@router.get("/{return_id}/status", response_model=ReturnStatusResponse)
-@inject
-async def get_return_status(
-    return_id: str,
-    use_case: GetReturnStatusUseCase = Depends(Provide[Container.get_return_status_use_case]),
-) -> ReturnStatusResponse:
-    result = await use_case.execute(return_id=return_id)
-    return ReturnStatusResponse(
-        return_id=result.return_id,
-        sku_id=result.sku_id,
-        seller_id=result.seller_id,
-        buyer_id=result.buyer_id,
-        status=result.status,
-        image_count=result.image_count,
-        expected_image_count=result.expected_image_count,
-        created_at=result.created_at,
-        updated_at=result.updated_at,
-    )
+@router.get("/{return_id}/status")
+async def get_return_status(return_id: str) -> dict[str, str]:
+    item = get_return_from_store(return_id)
+    if not item:
+        return {"return_id": return_id, "status": "NOT_FOUND"}
+    return {
+        "return_id": return_id,
+        "status": item.get("status", "UNKNOWN"),
+        "updated_at": item.get("updated_at", ""),
+    }
 
 
 @router.post("/{return_id}/images/complete", response_model=ImageUploadCompleteResponse)
@@ -125,21 +125,12 @@ class UpdateStatusRequest(BaseModel):
     status: str = Field(min_length=1, max_length=50)
 
 
-class UpdateStatusResponse(BaseModel):
-    return_id: str
-    status: str
-
-
-@router.patch("/{return_id}/status", response_model=UpdateStatusResponse)
-async def update_return_status(
-    return_id: str,
-    payload: UpdateStatusRequest,
-) -> UpdateStatusResponse:
-    from app.infrastructure.persistence.in_memory_store import STORE
-    returns = STORE.setdefault("returns", {})
-    if return_id in returns and isinstance(returns[return_id], dict):
-        returns[return_id]["status"] = payload.status
-    return UpdateStatusResponse(return_id=return_id, status=payload.status)
+@router.patch("/{return_id}/status")
+async def patch_return_status(return_id: str, payload: UpdateStatusRequest) -> dict:
+    updated = update_return_status_in_store(return_id, payload.status)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Return not found")
+    return updated
 
 
 class DemoStatusResponse(BaseModel):
@@ -152,18 +143,16 @@ class DemoStatusResponse(BaseModel):
 
 @router.get("/{return_id}/flow-status", response_model=DemoStatusResponse)
 async def get_return_flow_status(return_id: str) -> DemoStatusResponse:
-    from app.api.routers.delivery import PRODUCTS_MAP
-    from app.infrastructure.persistence.in_memory_store import STORE
-    returns = STORE.get("returns", {})
-    data = returns.get(return_id)
-    if isinstance(data, dict):
+    data = get_return_from_store(return_id)
+    grade_data = get_grade(return_id) or {}
+    if data:
         sku = str(data.get("sku_id", ""))
         return DemoStatusResponse(
             return_id=return_id,
             status=data.get("status", "UNKNOWN"),
             sku_id=sku,
-            product_name=PRODUCTS_MAP.get(sku, sku),
-            grade=data.get("grade", ""),
+            product_name=data.get("product_name", sku),
+            grade=grade_data.get("grade", ""),
         )
     return DemoStatusResponse(
         return_id=return_id,

@@ -1,9 +1,16 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import Header from "../../components/layout/Header";
 
 const BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 const API_KEY = import.meta.env.VITE_API_KEY || "returniq-dev-key-2026";
+
+const GRADE_COLORS = {
+  A: { bg: "#d4edda", color: "#155724", label: "Grade A — Like New" },
+  B: { bg: "#fff3cd", color: "#856404", label: "Grade B — Good" },
+  C: { bg: "#f8d7da", color: "#721c24", label: "Grade C — Fair" },
+  D: { bg: "#f5c6cb", color: "#721c24", label: "Grade D — Damaged" },
+};
 
 async function apiFetch(url, options = {}) {
   const res = await fetch(url, {
@@ -11,82 +18,81 @@ async function apiFetch(url, options = {}) {
     headers: {
       "Content-Type": "application/json",
       "X-API-Key": API_KEY,
-      ...options.headers,
+      ...(options.headers || {}),
     },
   });
   if (!res.ok) throw new Error(`${res.status}`);
   return res.json();
 }
 
-const GRADE_COLORS = { A: "#007600", B: "#c45500", C: "#c40000" };
-
-const DEFAULT_MOCK_PICKUPS = [
-  {
-    return_id: "d001",
-    product: "Nike Air Max 270",
-    grade: "A",
-    address: "Patia, Bhubaneswar, 751024",
-    pickup_window: "Tomorrow, 10 AM – 2 PM",
-  },
-];
-
 export default function DeliveryAgentView() {
-  const [pickups, setPickups] = useState([]);
-  const [toast, setToast] = useState(null);
-  const navigate = useNavigate();
+  const [queue, setQueue] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState({ pickups: 0, graded: 0, flagged: 0 });
 
   useEffect(() => {
-    async function load() {
+    let mounted = true;
+    async function loadQueue() {
       try {
-        const res = await apiFetch(`${BASE}/delivery/queue`);
-        setPickups(res.length > 0 ? res : DEFAULT_MOCK_PICKUPS);
+        const data = await apiFetch(`${BASE}/delivery/queue`);
+        if (mounted) {
+          setQueue(data);
+          setLoading(false);
+          setStats((prev) => ({ ...prev, pickups: data.length }));
+        }
       } catch {
-        setPickups(DEFAULT_MOCK_PICKUPS);
+        if (mounted) setLoading(false);
       }
     }
-    load();
-    const t = setInterval(load, 3000);
-    return () => clearInterval(t);
+    loadQueue();
+    const t = setInterval(loadQueue, 3000);
+    return () => { mounted = false; clearInterval(t); };
   }, []);
 
-  async function handlePickedUp(item) {
-    const removedItem = item;
-    setPickups((prev) => prev.filter((i) => i.return_id !== item.return_id));
-
-    try {
-      await apiFetch(`${BASE}/delivery/${item.return_id}/confirm`, { method: "POST" });
-      setToast("✅ Picked up – item sent to warehouse");
-      setTimeout(() => setToast(null), 3000);
-    } catch {
-      setPickups((prev) => [...prev, removedItem]);
-      setToast("❌ Error – try again");
-      setTimeout(() => setToast(null), 3000);
-    }
-  }
-
   return (
-    <div style={{ backgroundColor: "#f3f3f3", minHeight: "100vh", fontFamily: "sans-serif", paddingBottom: 40 }}>
+    <div style={{ backgroundColor: "#f3f3f3", minHeight: "100vh", fontFamily: "sans-serif", paddingBottom: 80 }}>
       <Header onReturnClick={() => {}} />
 
       <main style={{ padding: 24 }}>
         <div style={{ maxWidth: 700, margin: "0 auto" }}>
-          <h1 style={{ fontSize: 22, fontWeight: 700, color: "#131921", marginBottom: 6 }}>
-            📦 Delivery Agent Queue
-          </h1>
-          <p style={{ fontSize: 13, color: "#565959", marginBottom: 24 }}>
-            Items pending pickup from customers.
-          </p>
 
-          {pickups.length === 0 ? (
-            <div style={{
-              backgroundColor: "white", border: "1px solid #ddd", borderRadius: 6,
-              padding: 40, textAlign: "center", color: "#767676",
+          {/* Section Header */}
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
+            <h2 style={{ fontSize: 20, fontWeight: 700, color: "#131921", margin: 0 }}>
+              Pending Pickups
+            </h2>
+            <span style={{
+              backgroundColor: "#fff3cd", color: "#856404",
+              padding: "3px 10px", borderRadius: 12, fontSize: 12, fontWeight: "bold",
             }}>
-              <div style={{ fontSize: 36, marginBottom: 12 }}>📭</div>
-              <p style={{ fontSize: 15 }}>No pickups scheduled right now</p>
+              {queue.length} in queue
+            </span>
+          </div>
+
+          {/* Loading */}
+          {loading && (
+            <div style={{ textAlign: "center", padding: 40, color: "#565959", fontSize: 14 }}>
+              Loading queue...
             </div>
-          ) : (
-            pickups.map((item) => (
+          )}
+
+          {/* Empty State */}
+          {!loading && queue.length === 0 && (
+            <div style={{
+              backgroundColor: "white", border: "1px solid #ddd", borderRadius: 8,
+              padding: 40, textAlign: "center",
+            }}>
+              <div style={{ fontSize: 36, marginBottom: 12 }}>✅</div>
+              <p style={{ fontSize: 15, color: "#565959", margin: 0 }}>
+                No pending pickups. Check back soon.
+              </p>
+            </div>
+          )}
+
+          {/* Queue Cards */}
+          {queue.map((item) => {
+            const gradeInfo = GRADE_COLORS[item.grade] || GRADE_COLORS.B;
+            return (
               <div
                 key={item.return_id}
                 style={{
@@ -99,32 +105,38 @@ export default function DeliveryAgentView() {
                   boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
                 }}
               >
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                  <span style={{ fontSize: 16, fontWeight: 600, color: "#111" }}>
-                    {item.product_name || item.product || item.sku_id || "Product"}
+                {/* Product Name + Grade */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                  <span style={{ fontSize: 16, fontWeight: 700, color: "#111" }}>
+                    {item.product_name || item.sku_id || "Product"}
                   </span>
-                  {item.grade && (
-                    <span style={{
-                      backgroundColor: GRADE_COLORS[item.grade] || "#767676",
-                      color: "white",
-                      padding: "3px 10px",
-                      borderRadius: 12,
-                      fontSize: 12,
-                      fontWeight: "bold",
-                    }}>
-                      Grade {item.grade}
-                    </span>
-                  )}
+                  <span style={{
+                    backgroundColor: gradeInfo.bg,
+                    color: gradeInfo.color,
+                    padding: "4px 12px",
+                    borderRadius: 12,
+                    fontSize: 11,
+                    fontWeight: "bold",
+                  }}>
+                    {gradeInfo.label}
+                  </span>
                 </div>
-                <div style={{ fontSize: 13, color: "#565959", marginBottom: 6 }}>
-                  📍 {item.pickup_address || item.address || "Customer address"}
+
+                {/* Pickup Address */}
+                <div style={{ fontSize: 13, color: "#555", marginBottom: 6 }}>
+                  📍 <strong>Address:</strong> {item.pickup_address || item.address || "Customer address"}
                 </div>
-                <div style={{ fontSize: 12, color: "#767676", marginBottom: 14 }}>
-                  🕐 {item.pickup_window || "Scheduled"}
+
+                {/* Pickup Window */}
+                <div style={{ fontSize: 13, color: "#555", marginBottom: 14 }}>
+                  🕐 <strong>Window:</strong> {item.pickup_window || "Scheduled"}
                 </div>
+
+                {/* Start Pickup Button */}
                 <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                  <button
-                    onClick={() => handlePickedUp(item)}
+                  <Link
+                    to={`/delivery/pickup/${item.return_id}`}
+                    state={{ returnData: item }}
                     style={{
                       backgroundColor: "#27726b",
                       color: "white",
@@ -133,28 +145,39 @@ export default function DeliveryAgentView() {
                       borderRadius: 4,
                       fontSize: 13,
                       fontWeight: "bold",
-                      cursor: "pointer",
+                      textDecoration: "none",
+                      textAlign: "center",
                     }}
                   >
-                    📦 PICKED UP
-                  </button>
+                    Start Pickup →
+                  </Link>
                 </div>
               </div>
-            ))
-          )}
+            );
+          })}
         </div>
       </main>
 
-      {toast && (
-        <div style={{
-          position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)",
-          backgroundColor: "#131921", color: "white", padding: "10px 24px",
-          borderRadius: 6, fontSize: 14, fontWeight: 500, zIndex: 999,
-          boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
-        }}>
-          {toast}
-        </div>
-      )}
+      {/* Stats Footer */}
+      <footer style={{
+        position: "fixed",
+        bottom: 0,
+        left: 0,
+        right: 0,
+        backgroundColor: "#131921",
+        color: "white",
+        padding: "14px 24px",
+        display: "flex",
+        justifyContent: "space-around",
+        zIndex: 50,
+        borderTop: "2px solid #27726b",
+        fontFamily: "monospace",
+        fontSize: 13,
+      }}>
+        <span>In queue: <strong>{queue.length}</strong></span>
+        <span>Picked today: <strong>{stats.pickups}</strong></span>
+        <span>Flagged: <strong>{stats.flagged}</strong></span>
+      </footer>
     </div>
   );
 }

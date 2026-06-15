@@ -1,6 +1,7 @@
 # app/container.py
 from __future__ import annotations
 
+import os
 from typing import Any
 
 from dependency_injector import containers, providers
@@ -141,6 +142,8 @@ from app.infrastructure.persistence.in_memory_workflow_state_repository import (
 )
 from app.infrastructure.storage.s3_image_storage import S3ImageStorage
 
+DEMO_MODE = os.getenv("DEMO_MODE", "true") == "true"
+
 
 def _build_return_repository(table: Any) -> Any:
     if table is None:
@@ -257,11 +260,31 @@ class Container(containers.DeclarativeContainer):
 
     config: providers.Singleton[AppConfig] = providers.Singleton(get_config)
 
-    dynamodb_table = providers.Singleton(build_dynamodb_table, config=config)
-    s3_client = providers.Singleton(build_s3_client, config=config)
-    rekognition_client = providers.Singleton(build_rekognition_client, config=config)
-    bedrock_client = providers.Singleton(build_bedrock_client, config=config)
-    sqs_client = providers.Singleton(build_sqs_client, config=config)
+    dynamodb_table = (
+        providers.Object(None)
+        if DEMO_MODE
+        else providers.Singleton(build_dynamodb_table, config=config)
+    )
+    s3_client = (
+        providers.Object(None)
+        if DEMO_MODE
+        else providers.Singleton(build_s3_client, config=config)
+    )
+    rekognition_client = (
+        providers.Object(None)
+        if DEMO_MODE
+        else providers.Singleton(build_rekognition_client, config=config)
+    )
+    bedrock_client = (
+        providers.Object(None)
+        if DEMO_MODE
+        else providers.Singleton(build_bedrock_client, config=config)
+    )
+    sqs_client = (
+        providers.Object(None)
+        if DEMO_MODE
+        else providers.Singleton(build_sqs_client, config=config)
+    )
 
     return_repository = providers.Singleton(_build_return_repository, table=dynamodb_table)
     condition_grade_repository = providers.Singleton(

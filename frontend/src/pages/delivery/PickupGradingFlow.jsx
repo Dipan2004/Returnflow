@@ -1,7 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import { useAuth } from "../../contexts/AuthContext";
-import { products } from "../../data/products";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import Header from "../../components/layout/Header";
 
 const BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
@@ -13,94 +11,84 @@ async function apiFetch(url, options = {}) {
     headers: {
       "Content-Type": "application/json",
       "X-API-Key": API_KEY,
-      ...options.headers,
+      ...(options.headers || {}),
     },
   });
   if (!res.ok) throw new Error(`${res.status}`);
   return res.json();
 }
 
-const GRADE_COLORS = { A: "#007600", B: "#c45500", C: "#c40000" };
+const GRADE_BG = { A: "#d4edda", B: "#fff3cd", C: "#f8d7da", D: "#f5c6cb" };
+const GRADE_COLOR = { A: "#155724", B: "#856404", C: "#721c24", D: "#721c24" };
 
 export default function PickupGradingFlow() {
   const { return_id } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const location = useLocation();
 
   const [step, setStep] = useState(1);
   const [returnData, setReturnData] = useState(null);
 
-  // Step 1: Verify Product state
-  const [selectedProductId, setSelectedProductId] = useState("");
-  const [verificationImage, setVerificationImage] = useState(null);
-  const [verified, setVerified] = useState(false);
-  const [mismatch, setMismatch] = useState(false);
-  const [verificationDone, setVerificationDone] = useState(false);
-  const verifyFileRef = useRef(null);
+  // Step 1: Verify state
+  const [selectedProduct, setSelectedProduct] = useState("");
+  const [matchesOrder, setMatchesOrder] = useState(null);
+  const [flaggedMismatch, setFlaggedMismatch] = useState(false);
+  const [verifyPhotoPreview, setVerifyPhotoPreview] = useState(null);
+  const verifyPhotoRef = useRef(null);
 
-  // Step 3: Condition photos
+  // Step 2: Condition photos
   const [previews, setPreviews] = useState([null, null, null]);
   const fileInputRef1 = useRef(null);
   const fileInputRef2 = useRef(null);
   const fileInputRef3 = useRef(null);
   const fileInputRefs = [fileInputRef1, fileInputRef2, fileInputRef3];
 
+  // Load return data: router state > API > localStorage > fallback
   useEffect(() => {
-    const current = JSON.parse(localStorage.getItem("returniq_returns") || "[]");
-    const found = current.find((r) => r.return_id === return_id);
-    if (found) {
-      setReturnData(found);
-    } else {
+    if (location.state?.returnData) {
+      setReturnData(location.state.returnData);
+      return;
+    }
+    async function fetchReturn() {
+      try {
+        const data = await apiFetch(`${BASE}/delivery/queue`);
+        const found = data.find((r) => r.return_id === return_id);
+        if (found) {
+          setReturnData({
+            return_id: found.return_id,
+            product_name: found.product_name,
+            sku_id: found.sku_id,
+            grade: found.grade,
+            pickup_address: found.pickup_address,
+            pickup_window: found.pickup_window,
+          });
+          return;
+        }
+      } catch {}
+      const current = JSON.parse(localStorage.getItem("returniq_returns") || "[]");
+      const found = current.find((r) => r.return_id === return_id);
+      if (found) {
+        setReturnData(found);
+        return;
+      }
       setReturnData({
         return_id: return_id,
-        product_name: "Nike Air Max 270",
-        sku_id: "1",
-        grade: "A",
-        address: "Patia, Bhubaneswar, 751024",
+        product_name: "Product",
+        grade: "B",
+        pickup_address: "Customer Address",
+        pickup_window: "Tomorrow, 10 AM – 2 PM",
       });
     }
-  }, [return_id]);
+    fetchReturn();
+  }, [return_id, location.state]);
 
-  // Find expected product from products.js
-  const expectedProduct = returnData
-    ? products.find(
-        (p) =>
-          p.id.toString() === (returnData.sku_id || "").toString() ||
-          p.name === returnData.product_name
-      )
-    : null;
-
-  // Get top 8 products for selection (same category first)
-  const productOptions = (() => {
-    if (!expectedProduct) return products.slice(0, 8);
-    const sameCategory = products.filter((p) => p.category === expectedProduct.category && p.id !== expectedProduct.id);
-    const others = products.filter((p) => p.category !== expectedProduct.category);
-    return [expectedProduct, ...sameCategory, ...others].slice(0, 8);
-  })();
-
-  function handleVerifyImageChange(e) {
-    const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => setVerificationImage(event.target.result);
-      reader.readAsDataURL(file);
-    }
-  }
-
-  function handleVerifyProceed() {
-    const selectedId = Number(selectedProductId);
-    const isMatch = expectedProduct && selectedId === expectedProduct.id;
-    setVerified(true);
-    setMismatch(!isMatch);
-    setVerificationDone(true);
-    setStep(2);
-  }
-
-  function handleMismatchProceed() {
-    setVerified(true);
-    setVerificationDone(true);
-    setStep(2);
-  }
+  // Auto-detect mismatch from product selector
+  useEffect(() => {
+    if (!selectedProduct || !returnData) return;
+    const matches = selectedProduct === returnData.product_name;
+    setMatchesOrder(matches);
+    setFlaggedMismatch(!matches);
+  }, [selectedProduct, returnData]);
 
   function handleConditionPhoto(index, e) {
     const file = e.target.files[0];
@@ -125,40 +113,41 @@ export default function PickupGradingFlow() {
   }
 
   async function handleConfirmPickup() {
-    // Update localStorage for backwards compat
-    const current = JSON.parse(localStorage.getItem("returniq_returns") || "[]");
-    const updated = current.map((r) => {
-      if (r.return_id === return_id) {
-        return { ...r, status: "PICKED_UP", grade: returnData.grade || "A" };
-      }
-      return r;
-    });
-    localStorage.setItem("returniq_returns", JSON.stringify(updated));
-
     try {
       await apiFetch(`${BASE}/delivery/${return_id}/confirm`, {
         method: "POST",
         body: JSON.stringify({
           return_id,
-          verified,
-          mismatch,
-          agent_id: user?.name || "agent",
+          verified: matchesOrder,
+          mismatch: flaggedMismatch,
+          agent_id: "agent1",
+          product_name: returnData?.product_name,
+          sku_id: returnData?.sku_id,
         }),
       });
-      alert("✅ Confirmed. Pickup recorded.");
     } catch {
-      alert("✅ Pickup recorded locally (offline mode).");
+      console.warn("Pickup confirm API failed — local only");
     }
-
+    const current = JSON.parse(localStorage.getItem("returniq_returns") || "[]");
+    const updated = current.map((r) =>
+      r.return_id === return_id ? { ...r, status: "PICKED_UP" } : r
+    );
+    localStorage.setItem("returniq_returns", JSON.stringify(updated));
+    const todayStats = JSON.parse(
+      localStorage.getItem("returniq_delivery_stats") || '{"pickups":0,"graded":0,"flagged":0}'
+    );
+    todayStats.pickups += 1;
+    todayStats.graded += 1;
+    if (flaggedMismatch) todayStats.flagged += 1;
+    localStorage.setItem("returniq_delivery_stats", JSON.stringify(todayStats));
     navigate("/delivery");
   }
 
   if (!returnData) return null;
 
-  const productName = expectedProduct?.name || returnData.product_name || "Product";
-  const productImage = expectedProduct?.image || "https://via.placeholder.com/200x200?text=Product";
-  const grade = returnData.grade || "B";
-  const isPhotosUploaded = previews.every((p) => p !== null);
+  const productName = returnData.product_name || "Product";
+  const displayGrade = returnData.grade || "B";
+  const isPhotosUploaded = previews.some((p) => p !== null);
 
   return (
     <div style={{ backgroundColor: "#f3f3f3", minHeight: "100vh", fontFamily: "sans-serif", paddingBottom: 60 }}>
@@ -184,146 +173,89 @@ export default function PickupGradingFlow() {
             <div>
               <h2 style={{ fontSize: 16, fontWeight: 600, margin: "0 0 16px 0" }}>Verify Product Identity</h2>
 
-              {/* Expected product display */}
               <div style={{ display: "flex", gap: 16, marginBottom: 20, backgroundColor: "#fafafa", padding: 12, borderRadius: 4, border: "1px solid #eee" }}>
-                <img src={productImage} alt={productName} style={{ width: 80, height: 80, objectFit: "contain", border: "1px solid #ddd", borderRadius: 4 }} />
+                <div style={{ width: 60, height: 60, backgroundColor: "#eee", borderRadius: 4, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24 }}>📦</div>
                 <div style={{ fontSize: 13, lineHeight: 1.5 }}>
-                  <strong>Expected Item:</strong> {productName}
-                  <br />
-                  <strong>Return ID:</strong> {return_id}
-                  <br />
+                  <strong>Expected:</strong> {productName}<br />
+                  <strong>Return ID:</strong> {return_id}<br />
                   <span style={{ color: "#565959" }}>Confirm this is the item you are collecting</span>
                 </div>
               </div>
 
-              {/* Product selection dropdown */}
-              <div style={{ marginBottom: 20 }}>
+              {/* Product selector */}
+              <div style={{ marginBottom: 16 }}>
                 <label style={{ fontSize: 13, fontWeight: 600, display: "block", marginBottom: 6 }}>
-                  Select the product you see physically:
+                  Select the product you physically see:
                 </label>
                 <select
-                  value={selectedProductId}
-                  onChange={(e) => setSelectedProductId(e.target.value)}
-                  style={{ width: "100%", padding: "10px 12px", border: "1px solid #ccc", borderRadius: 4, fontSize: 14 }}
+                  value={selectedProduct}
+                  onChange={(e) => setSelectedProduct(e.target.value)}
+                  style={{ width: "100%", padding: "8px 12px", border: "1px solid #aaa", borderRadius: 4, fontSize: 14 }}
                 >
                   <option value="">-- Select product --</option>
-                  {productOptions.map((p) => (
-                    <option key={p.id} value={p.id}>{p.name} ({p.brand})</option>
-                  ))}
+                  <option value={productName}>{productName}</option>
+                  <option value="Nike Air Max 270">Nike Air Max 270</option>
+                  <option value="boAt Rockerz 450">boAt Rockerz 450</option>
+                  <option value="Puma RS-X Reinvention">Puma RS-X Reinvention</option>
+                  <option value="Sony WH-1000XM5">Sony WH-1000XM5</option>
+                  <option value="Adidas Ultraboost 22">Adidas Ultraboost 22</option>
+                  <option value="Other / Different item">Other / Different item</option>
                 </select>
               </div>
 
-              {/* Verification image */}
-              <div style={{ marginBottom: 20 }}>
+              {/* Verification result */}
+              {selectedProduct && (
+                <div style={{
+                  backgroundColor: flaggedMismatch ? "#fff3cd" : "#d4edda",
+                  border: `1px solid ${flaggedMismatch ? "#ffeeba" : "#c3e6cb"}`,
+                  padding: 10, borderRadius: 4, marginBottom: 16, fontSize: 13,
+                  color: flaggedMismatch ? "#856404" : "#155724",
+                }}>
+                  {flaggedMismatch
+                    ? "⚠️ Product mismatch detected — you can still proceed"
+                    : "✅ Product verified — matches expected item"}
+                </div>
+              )}
+
+              {/* Single verification photo */}
+              <div style={{ marginBottom: 16 }}>
                 <label style={{ fontSize: 13, fontWeight: 600, display: "block", marginBottom: 6 }}>
-                  Take one photo of the item:
+                  📷 Take one photo of the item:
                 </label>
                 <div
-                  onClick={() => verifyFileRef.current.click()}
+                  onClick={() => verifyPhotoRef.current.click()}
                   style={{
-                    width: "100%", height: 160,
-                    border: "2px dashed #aaa", borderRadius: 8,
+                    height: 120, border: "2px dashed #aaa", borderRadius: 6,
                     display: "flex", alignItems: "center", justifyContent: "center",
-                    cursor: "pointer", backgroundColor: "#fcfcfc", overflow: "hidden",
-                    position: "relative",
+                    cursor: "pointer", backgroundColor: "#fafafa", overflow: "hidden",
                   }}
                 >
-                  {verificationImage ? (
-                    <img src={verificationImage} alt="Verification" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
-                  ) : (
-                    <div style={{ textAlign: "center", color: "#666" }}>
-                      <span style={{ fontSize: 28 }}>📷</span>
-                      <p style={{ margin: "4px 0 0 0", fontSize: 12 }}>Click to capture / upload</p>
-                    </div>
-                  )}
+                  {verifyPhotoPreview
+                    ? <img src={verifyPhotoPreview} alt="Verify" style={{ height: "100%", objectFit: "cover" }} />
+                    : <span style={{ color: "#888", fontSize: 13 }}>Click to open camera or upload</span>
+                  }
                   <input
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    ref={verifyFileRef}
-                    onChange={handleVerifyImageChange}
-                    style={{ display: "none" }}
+                    type="file" accept="image/*" capture="environment"
+                    ref={verifyPhotoRef} style={{ display: "none" }}
+                    onChange={(e) => {
+                      const f = e.target.files[0];
+                      if (f) setVerifyPhotoPreview(URL.createObjectURL(f));
+                    }}
                   />
-                </div>
-              </div>
-
-              {/* Verify button */}
-              <button
-                disabled={!selectedProductId || !verificationImage}
-                onClick={handleVerifyProceed}
-                style={{
-                  width: "100%",
-                  backgroundColor: selectedProductId && verificationImage ? "#27726b" : "#e7e9ec",
-                  border: "none",
-                  color: selectedProductId && verificationImage ? "white" : "#888",
-                  padding: "12px 0",
-                  borderRadius: 4,
-                  fontSize: 14,
-                  fontWeight: "bold",
-                  cursor: selectedProductId && verificationImage ? "pointer" : "not-allowed",
-                }}
-              >
-                Verify & Proceed
-              </button>
-            </div>
-          )}
-
-          {/* Mismatch confirmation (shown inline if mismatch detected) */}
-          {step === 2 && mismatch && !verificationDone && (
-            <div style={{ backgroundColor: "#fff3cd", border: "1px solid #ffeeba", padding: 16, borderRadius: 4, marginBottom: 16 }}>
-              <p style={{ fontSize: 13, color: "#856404", margin: "0 0 12px 0" }}>
-                ⚠️ Product mismatch detected. The item you selected does not match the return order. Do you want to proceed anyway?
-              </p>
-              <button
-                onClick={handleMismatchProceed}
-                style={{
-                  backgroundColor: "#ffa41c", border: "1px solid #ff9900",
-                  color: "#111", padding: "8px 20px", borderRadius: 4,
-                  fontSize: 13, fontWeight: 600, cursor: "pointer",
-                }}
-              >
-                Proceed Anyway
-              </button>
-            </div>
-          )}
-
-          {/* STEP 2: AI Grade Display */}
-          {step === 2 && (
-            <div>
-              <h2 style={{ fontSize: 16, fontWeight: 600, margin: "0 0 16px 0" }}>AI Grade Result</h2>
-
-              {/* Verification status */}
-              <div style={{
-                backgroundColor: mismatch ? "#fff3cd" : "#d4edda",
-                border: `1px solid ${mismatch ? "#ffeeba" : "#c3e6cb"}`,
-                padding: 10, borderRadius: 4, marginBottom: 16, fontSize: 13,
-                color: mismatch ? "#856404" : "#155724",
-              }}>
-                {mismatch ? "⚠️ Product mismatch flagged – proceeding with collection" : "✅ Product verified successfully"}
-              </div>
-
-              <div style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 20 }}>
-                <div style={{
-                  width: 64, height: 64, borderRadius: "50%",
-                  backgroundColor: GRADE_COLORS[grade] || "#767676",
-                  color: "white", display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 24, fontWeight: "bold",
-                }}>
-                  {grade}
-                </div>
-                <div>
-                  <div style={{ fontSize: 15, fontWeight: "bold" }}>Grade {grade} Assessed</div>
-                  <div style={{ fontSize: 12, color: "#666" }}>AI-verified condition grade</div>
                 </div>
               </div>
 
               <div style={{ display: "flex", justifyContent: "flex-end" }}>
                 <button
-                  onClick={() => setStep(3)}
+                  disabled={!selectedProduct}
+                  onClick={() => setStep(2)}
                   style={{
-                    backgroundColor: "#ffa41c", border: "1px solid #ff9900",
-                    color: "#111", padding: "8px 24px", borderRadius: 4,
-                    fontSize: 14, fontWeight: 600, cursor: "pointer",
+                    backgroundColor: selectedProduct ? "#ffa41c" : "#e7e9ec",
+                    border: `1px solid ${selectedProduct ? "#ff9900" : "#adb1b8"}`,
+                    color: selectedProduct ? "#111" : "#888",
+                    padding: "8px 24px", borderRadius: 4,
+                    fontSize: 14, fontWeight: 600,
+                    cursor: selectedProduct ? "pointer" : "not-allowed",
                   }}
                 >
                   Continue
@@ -332,12 +264,12 @@ export default function PickupGradingFlow() {
             </div>
           )}
 
-          {/* STEP 3: Condition Photos */}
-          {step === 3 && (
+          {/* STEP 2: Condition Photos */}
+          {step === 2 && (
             <div>
               <h2 style={{ fontSize: 16, fontWeight: 600, margin: "0 0 8px 0" }}>Capture Condition Photos</h2>
               <p style={{ fontSize: 13, color: "#666", margin: "0 0 16px 0" }}>
-                Take 3 photos: front, back, and damage area (if any).
+                Upload at least 1 photo: front, back, or damage area.
               </p>
 
               <div style={{ display: "flex", gap: 12, marginBottom: 24 }}>
@@ -377,9 +309,7 @@ export default function PickupGradingFlow() {
                       </div>
                     )}
                     <input
-                      type="file"
-                      accept="image/*"
-                      capture="environment"
+                      type="file" accept="image/*" capture="environment"
                       ref={fileInputRefs[idx]}
                       onChange={(e) => handleConditionPhoto(idx, e)}
                       style={{ display: "none" }}
@@ -390,14 +320,14 @@ export default function PickupGradingFlow() {
 
               <div style={{ display: "flex", justifyContent: "space-between" }}>
                 <button
-                  onClick={() => setStep(2)}
+                  onClick={() => setStep(1)}
                   style={{ backgroundColor: "white", border: "1px solid #aaa", padding: "8px 24px", borderRadius: 4, fontSize: 14, cursor: "pointer" }}
                 >
                   Back
                 </button>
                 <button
                   disabled={!isPhotosUploaded}
-                  onClick={() => setStep(4)}
+                  onClick={() => setStep(3)}
                   style={{
                     backgroundColor: isPhotosUploaded ? "#ffa41c" : "#e7e9ec",
                     border: `1px solid ${isPhotosUploaded ? "#ff9900" : "#adb1b8"}`,
@@ -413,29 +343,89 @@ export default function PickupGradingFlow() {
             </div>
           )}
 
+          {/* STEP 3: Grade Display */}
+          {step === 3 && (
+            <div>
+              <h2 style={{ fontSize: 16, fontWeight: 600, margin: "0 0 16px 0" }}>AI Grade Result</h2>
+
+              <div style={{
+                backgroundColor: flaggedMismatch ? "#fff3cd" : "#d4edda",
+                border: `1px solid ${flaggedMismatch ? "#ffeeba" : "#c3e6cb"}`,
+                padding: 10, borderRadius: 4, marginBottom: 16, fontSize: 13,
+                color: flaggedMismatch ? "#856404" : "#155724",
+              }}>
+                {flaggedMismatch ? "⚠️ Product mismatch flagged" : "✅ Product verified"}
+              </div>
+
+              <div style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 20 }}>
+                <div style={{
+                  width: 64, height: 64, borderRadius: "50%",
+                  backgroundColor: GRADE_BG[displayGrade] || "#eee",
+                  color: GRADE_COLOR[displayGrade] || "#333",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 24, fontWeight: "bold",
+                }}>
+                  {displayGrade}
+                </div>
+                <div>
+                  <div style={{ fontSize: 15, fontWeight: "bold" }}>Grade {displayGrade} Assessed</div>
+                  <div style={{ fontSize: 12, color: "#666" }}>AI-verified condition grade</div>
+                </div>
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <button
+                  onClick={() => setStep(2)}
+                  style={{ backgroundColor: "white", border: "1px solid #aaa", padding: "8px 24px", borderRadius: 4, fontSize: 14, cursor: "pointer" }}
+                >
+                  Back
+                </button>
+                <button
+                  onClick={() => setStep(4)}
+                  style={{
+                    backgroundColor: "#ffa41c", border: "1px solid #ff9900",
+                    color: "#111", padding: "8px 24px", borderRadius: 4,
+                    fontSize: 14, fontWeight: 600, cursor: "pointer",
+                  }}
+                >
+                  Continue
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* STEP 4: Confirm Pickup */}
           {step === 4 && (
             <div>
               <h2 style={{ fontSize: 16, fontWeight: 600, margin: "0 0 16px 0" }}>Confirm Collection</h2>
 
-              {/* Summary */}
               <div style={{ backgroundColor: "#fafafa", border: "1px solid #eee", borderRadius: 4, padding: 16, marginBottom: 20, fontSize: 13, lineHeight: 1.6 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                  <span>{mismatch ? "⚠️" : "✅"}</span>
-                  <strong>Product Verification:</strong>
-                  <span style={{ color: mismatch ? "#856404" : "#155724" }}>
-                    {mismatch ? "Mismatch flagged" : "Verified"}
+                  <span>{flaggedMismatch ? "⚠️" : "✅"}</span>
+                  <strong>Verification:</strong>
+                  <span style={{ color: flaggedMismatch ? "#856404" : "#155724" }}>
+                    {flaggedMismatch ? "Mismatch flagged" : "Verified"}
                   </span>
                 </div>
                 <div style={{ marginBottom: 6 }}>
                   <strong>Grade:</strong>{" "}
-                  <span style={{ backgroundColor: GRADE_COLORS[grade] || "#767676", color: "white", padding: "2px 8px", borderRadius: 10, fontSize: 11, fontWeight: "bold" }}>
-                    Grade {grade}
+                  <span style={{
+                    backgroundColor: GRADE_BG[displayGrade] || "#eee",
+                    color: GRADE_COLOR[displayGrade] || "#333",
+                    padding: "2px 8px", borderRadius: 10, fontSize: 11, fontWeight: "bold",
+                  }}>
+                    Grade {displayGrade}
                   </span>
                 </div>
-                <div>
-                  <strong>📍 Address:</strong> {returnData.address || "Patia, Bhubaneswar, 751024"}
-                </div>
+                <div><strong>📍 Address:</strong> {returnData.pickup_address || "Patia, Bhubaneswar, 751024"}</div>
+              </div>
+
+              <div style={{ border: "1px solid #bce1dd", backgroundColor: "#f0faf8", padding: 16, borderRadius: 6, marginBottom: 20 }}>
+                <div style={{ fontSize: 11, color: "#27726b", textTransform: "uppercase", fontWeight: "bold" }}>Status</div>
+                <div style={{ fontSize: 15, fontWeight: "bold", color: "#27726b", margin: "4px 0" }}>✅ Ready for collection</div>
+                <p style={{ margin: 0, fontSize: 12, color: "#555" }}>
+                  Item graded and ready for warehouse processing.
+                </p>
               </div>
 
               <button

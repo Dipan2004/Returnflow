@@ -19,6 +19,7 @@ from app.application.use_cases.get_review_status_use_case import GetReviewStatus
 from app.application.use_cases.get_workflow_state_use_case import GetWorkflowStateUseCase
 from app.application.use_cases.process_grading_use_case import ProcessGradingUseCase
 from app.container import Container
+from app.infrastructure.persistence.in_memory_store import add_grade
 
 router = APIRouter(prefix="/grades", tags=["grading"])
 
@@ -31,11 +32,14 @@ async def process_grading_workflow(
 ) -> ProcessGradingResponse:
     result = await service.execute(body.return_id)
 
-    from app.infrastructure.persistence.in_memory_store import STORE
-    returns = STORE.get("returns", {})
-    if body.return_id in returns and isinstance(returns[body.return_id], dict):
-        returns[body.return_id]["grade"] = result.grade
-        returns[body.return_id]["condition_description"] = result.damage_description
+    add_grade(
+        body.return_id,
+        {
+            "grade": result.grade,
+            "confidence": result.confidence,
+            "damage_description": result.damage_description,
+        },
+    )
 
     return ProcessGradingResponse(
         return_id=result.return_id,
